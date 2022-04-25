@@ -3,7 +3,7 @@
  * Copyright (c) 2019 MediaTek Inc.
  */
 
-#define DEBUG 1
+#define DEBUG 0
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
