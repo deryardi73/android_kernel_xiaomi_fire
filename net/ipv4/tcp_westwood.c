@@ -43,8 +43,8 @@ struct westwood {
 };
 
 /* TCP Westwood functions and constants */
-#define TCP_WESTWOOD_RTT_MIN   (HZ/20)	/* 50ms */
-#define TCP_WESTWOOD_INIT_RTT  (20*HZ)	/* maybe too conservative?! */
+#define TCP_WESTWOOD_RTT_MIN   (HZ/50)	/* 20ms */
+#define TCP_WESTWOOD_INIT_RTT  (1*HZ)	/* maybe too conservative?! */
 
 /*
  * @tcp_westwood_create
@@ -79,7 +79,7 @@ static void tcp_westwood_init(struct sock *sk)
  */
 static inline u32 westwood_do_filter(u32 a, u32 b)
 {
-	return ((7 * a) + b) >> 3;
+	return ((3 * a) + b) >> 2;
 }
 
 static void westwood_filter(struct westwood *w, u32 delta)
@@ -285,7 +285,7 @@ static struct tcp_congestion_ops tcp_westwood __read_mostly = {
 	.pkts_acked	= tcp_westwood_pkts_acked,
 
 	.owner		= THIS_MODULE,
-	.name		= "westwood"
+	.name		= "westwood+"
 };
 
 static int __init tcp_westwood_register(void)
