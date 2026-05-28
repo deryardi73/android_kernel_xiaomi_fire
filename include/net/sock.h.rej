@@ -1,0 +1,13 @@
+--- include/net/sock.h
++++ include/net/sock.h
+@@ -515,6 +517,10 @@ struct sock {
+ 	void                    (*sk_destruct)(struct sock *sk);
+ 	struct sock_reuseport __rcu	*sk_reuseport_cb;
+ 	struct rcu_head		sk_rcu;
++
++#if IS_ENABLED(CONFIG_PROVE_LOCKING) && IS_ENABLED(CONFIG_MODULES)
++	struct module		*sk_owner;
++#endif
+ };
+ 
+ enum sk_pacing {
