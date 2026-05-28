@@ -297,7 +297,7 @@ static void __sbi_store_value(struct f2fs_attr *a,
 		break;
 	default:
 		f2fs_bug_on(sbi, 1);
-		f2fs_err(sbi->sb, KERN_ERR, "store sysfs node value with wrong type");
+		f2fs_err(sbi, KERN_ERR, "store sysfs node value with wrong type");
 	}
 }
 
