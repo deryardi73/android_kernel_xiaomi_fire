@@ -588,7 +588,7 @@ static void exit_mm(void)
 		mmap_read_lock(mm);
 	}
 	mmgrab(mm);
-	BUG_ON(mm != current->active_mm)
+	BUG_ON(mm != current->active_mm);
 	/* more a memory barrier than a real lock */
 	task_lock(current);
      current->user_dumpable = (get_dumpable(mm) == SUID_DUMP_USER);
