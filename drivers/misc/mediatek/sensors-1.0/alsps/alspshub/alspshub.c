@@ -16,6 +16,8 @@
 
 
 #define ALSPSHUB_DEV_NAME     "alsps_hub_pl"
+#define FIRE_PS_THD_VAL_HIGH  24
+#define FIRE_PS_THD_VAL_LOW   18
 
 struct alspshub_ipi_data {
 	struct work_struct init_done_work;
@@ -83,6 +85,31 @@ enum {
 
 extern int backlight_level_register_notifier(struct notifier_block *nb);
 extern int backlight_level_unregister_notifier(struct notifier_block *nb);
+
+static int alspshub_push_ps_threshold(struct alspshub_ipi_data *obj,
+	const char *reason)
+{
+	int err;
+	int32_t cfg_data[2] = {0};
+
+	if (!obj)
+		return -EINVAL;
+
+	spin_lock(&calibration_lock);
+	cfg_data[0] = atomic_read(&obj->ps_thd_val_high);
+	cfg_data[1] = atomic_read(&obj->ps_thd_val_low);
+	spin_unlock(&calibration_lock);
+
+	err = sensor_cfg_to_hub(ID_PROXIMITY,
+		(uint8_t *)cfg_data, sizeof(cfg_data));
+	if (err < 0)
+		pr_err("%s: sensor_cfg_to_hub ps fail\n", reason);
+	else
+		pr_debug("%s: ps threshold high=%d low=%d\n",
+			reason, cfg_data[0], cfg_data[1]);
+
+	return err;
+}
 
 long alspshub_read_ps(u8 *ps)
 {
@@ -306,14 +333,7 @@ static void alspshub_init_done_work(struct work_struct *work)
 		pr_err("sensor_set_cmd_to_hub fail,(ID: %d),(action: %d)\n",
 			ID_PROXIMITY, CUST_ACTION_SET_CALI);
 #else
-	/*spin_lock(&calibration_lock);
-	cfg_data[0] = atomic_read(&obj->ps_thd_val_high);
-	cfg_data[1] = atomic_read(&obj->ps_thd_val_low);
-	spin_unlock(&calibration_lock);
-	err = sensor_cfg_to_hub(ID_PROXIMITY,
-		(uint8_t *)cfg_data, sizeof(cfg_data));
-	if (err < 0)
-		pr_err("sensor_cfg_to_hub ps fail\n");*/
+	alspshub_push_ps_threshold(obj, __func__);
 
 	spin_lock(&calibration_lock);
 	cfg_data[0] = atomic_read(&obj->als_cali);
@@ -833,6 +853,9 @@ static int ps_enable_nodata(int en)
 	else
 		WRITE_ONCE(obj->ps_android_enable, false);
 
+	if (en == true)
+		alspshub_push_ps_threshold(obj, __func__);
+
 	res = sensor_enable_to_hub(ID_PROXIMITY, en);
 	if (res < 0) {
 		pr_err("als_enable_nodata is failed!!\n");
@@ -1028,8 +1051,8 @@ static int alspshub_probe(struct platform_device *pdev)
 	obj->enable = 0;
 	obj->pending_intr = 0;
 	obj->ps_cali = 0;
-	atomic_set(&obj->ps_thd_val_low, 21);
-	atomic_set(&obj->ps_thd_val_high, 28);
+	atomic_set(&obj->ps_thd_val_low, FIRE_PS_THD_VAL_LOW);
+	atomic_set(&obj->ps_thd_val_high, FIRE_PS_THD_VAL_HIGH);
 	WRITE_ONCE(obj->als_factory_enable, false);
 	WRITE_ONCE(obj->als_android_enable, false);
 	WRITE_ONCE(obj->ps_factory_enable, false);
