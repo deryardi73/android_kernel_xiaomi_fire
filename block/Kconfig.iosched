@@ -89,13 +89,13 @@ config MQ_IOSCHED_KYBER
 	  goal.
 
 config MQ_IOSCHED_SSG
-	tristate "SamSung Generic I/O scheduler"
+	bool "SamSung Generic I/O scheduler"
 	default y
 	---help---
 	  SamSung Generic IO scheduler.
 
 config MQ_IOSCHED_SSG_CGROUP
-	tristate "Control Group for SamSung Generic I/O scheduler"
+	bool "Control Group for SamSung Generic I/O scheduler"
 	default y
 	depends on BLK_CGROUP
 	depends on MQ_IOSCHED_SSG
