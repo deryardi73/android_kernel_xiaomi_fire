@@ -504,6 +504,33 @@ bool is_mcdi_working(void)
 	return working;
 }
 
+/*
+ * Governor "menu" (dan MTK-menu) sudah dimatikan — cuma TEO yang aktif.
+ * get_menu_predict_us()/get_menu_next_timer_us() tidak lagi tersedia,
+ * jadi ambil "waktu sampai timer terdekat" langsung dari tick-sched core,
+ * generik dan tidak terikat ke governor cpuidle manapun.
+ */
+static inline unsigned int mcdi_get_next_timer_us(void)
+{
+	ktime_t delta_next;
+	s64 next_timer_ns = tick_nohz_get_sleep_length(&delta_next);
+
+	if (next_timer_ns < 0)
+		next_timer_ns = 0;
+
+	return (unsigned int)div_u64(next_timer_ns, NSEC_PER_USEC);
+}
+
+static inline unsigned int mcdi_get_predict_us(void)
+{
+	/*
+	 * TEO tidak punya nilai "predicted idle duration" terpisah seperti
+	 * menu governor lama. Pakai waktu sampai timer terdekat sebagai
+	 * estimasi konservatif (anggap CPU idle sampai timer berikutnya).
+	 */
+	return mcdi_get_next_timer_us();
+}
+
 /* Select deepidle/SODI/cluster OFF/CPU OFF/WFI */
 int mcdi_governor_select(int cpu, int cluster_idx)
 {
@@ -555,8 +582,8 @@ int mcdi_governor_select(int cpu, int cluster_idx)
 
 	mcdi_sta->valid         = true;
 	mcdi_sta->enter_time_us = idle_get_current_time_us();
-	mcdi_sta->predict_us    = get_menu_predict_us();
-	mcdi_sta->next_timer_us = get_menu_next_timer_us();
+	mcdi_sta->predict_us    = mcdi_get_predict_us();
+	mcdi_sta->next_timer_us = mcdi_get_next_timer_us();
 
 	if (last_core_in_mcusys && last_core_token == -1) {
 		last_core_token      = cpu;
