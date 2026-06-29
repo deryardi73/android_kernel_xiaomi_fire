@@ -43,7 +43,7 @@ config CFQ_GROUP_IOSCHED
 choice
 
 	prompt "Default I/O scheduler"
-	default DEFAULT_MQ_IOSCHED_SSG
+	default DEFAULT_MQ_IOSCHED_CPQ
 	help
 	  Select the I/O scheduler which will be used by default for all
 	  block devices.
@@ -53,6 +53,9 @@ choice
 
 	config DEFAULT_MQ_DEADLINE
 		bool "MQ-Deadline" if MQ_IOSCHED_DEADLINE=y
+
+	config DEFAULT_MQ_IOSCHED_CPQ
+		bool "CPQ" if MQ_IOSCHED_CPQ=y
 
 	config DEFAULT_DEADLINE
 		bool "Deadline" if IOSCHED_DEADLINE=y
@@ -69,6 +72,7 @@ config DEFAULT_IOSCHED
 	string
 	default "ssg" if DEFAULT_MQ_IOSCHED_SSG
 	default "mq-deadline" if DEFAULT_MQ_DEADLINE
+	default "cpq" if DEFAULT_MQ_IOSCHED_CPQ
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
 	default "noop" if DEFAULT_NOOP
@@ -87,6 +91,15 @@ config MQ_IOSCHED_KYBER
 	  multiqueue and other fast devices. Given target latencies for reads and
 	  synchronous writes, it will self-tune queue depths to achieve that
 	  goal.
+
+config MQ_IOSCHED_CPQ
+	tristate "CPQ I/O scheduler"
+	default y
+	help
+	  CPQ (Custom Priority Queue) is a deadline-based I/O scheduler
+	  with foreground/background grouping and priority aging.
+
+	  If unsure, say N.
 
 config MQ_IOSCHED_SSG
 	bool "SamSung Generic I/O scheduler"
