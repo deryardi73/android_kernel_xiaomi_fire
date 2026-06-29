@@ -32,7 +32,7 @@
 #include "blk-mq-debugfs.h"
 #include "blk-mq-tag.h"
 #include "blk-mq-sched.h"
-#include "elevator.h"
+#include <linux/elevator.h>
 
 /*
  * Priority levels
