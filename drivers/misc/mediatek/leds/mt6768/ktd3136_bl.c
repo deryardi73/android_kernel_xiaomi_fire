@@ -789,7 +789,7 @@ void ktd3137_brightness_set_workfunc(struct ktd3137_chip *chip, int brightness)
 {
 	struct ktd3137_bl_pdata *pdata = chip->pdata;
 	int bl_level = brightness;
-	//static u8 brightness_off_flag = WT_FALSE;
+	static u8 brightness_off_flag = WT_FALSE;
 
 	if (lcd_id == 1) { /* 一供 */
 	    brightness = bl_mapping_table1[brightness];
@@ -797,6 +797,36 @@ void ktd3137_brightness_set_workfunc(struct ktd3137_chip *chip, int brightness)
 	    brightness = bl_mapping_table2[brightness];
 	} else {
 	    brightness = bl_mapping_table2[brightness];
+	}
+
+	if (brightness == 0) {
+	    brightness_off_flag = WT_TRUE;
+	    ktd3137_write_reg(chip->client, REG_MODE, 0x00); //5mA, Backlight mode bit[0] set to 0
+	}
+
+	if ((brightness_off_flag == WT_TRUE) && (brightness != 0)) {
+	    if (lcd_id == 1) { /* 一供 */
+	        if (ktd_hbm_mode == 3) { /* 3 is hbm_level */
+	            ktd3137_write_reg(bkl_chip->client, REG_MODE, 0xE1); /* 0xE1 is 27.4mA */
+	        } else if (ktd_hbm_mode == 2) { /* 2 is hbm_level */
+	            ktd3137_write_reg(bkl_chip->client, REG_MODE, 0xC9); /* 0xC9 is 25mA */
+	        } else if (ktd_hbm_mode == 1) {
+	            ktd3137_write_reg(chip->client, REG_MODE, 0xB1); /* 0xB1 is 22.6mA */
+	        } else {
+	            ktd3137_write_reg(chip->client, REG_MODE, 0xD1); /* 0xD1 is 25.8ma */
+	        }
+	    } else if (lcd_id == 0) { /* 二供 */
+	        if (ktd_hbm_mode == 3) { /* 3 is hbm_level */
+	            ktd3137_write_reg(bkl_chip->client, REG_MODE, 0xD9); /* 0xD9 is 26.6mA */
+	        } else if (ktd_hbm_mode == 2) { /* 2 is hbm_level */
+	            ktd3137_write_reg(bkl_chip->client, REG_MODE, 0xC1); /* 0xC1 is 24.2mA */
+	        } else if (ktd_hbm_mode == 1) {
+	            ktd3137_write_reg(chip->client, REG_MODE, 0xA9); /* 0xA9 is 21.8mA */
+	        } else {
+	            ktd3137_write_reg(chip->client, REG_MODE, 0xC9); /* 0xC9 is 25.0ma */
+	        }
+	    }
+	    brightness_off_flag = WT_FALSE;
 	}
 
 	if (pdata->pwm_mode) {
