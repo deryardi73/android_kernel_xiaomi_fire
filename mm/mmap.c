@@ -1202,10 +1202,9 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			 * been removed and next was expanded over it.
 			 */
 			area = next;
-		} else {
-			if (next && !insert)
-				uksm_vma_add_new(next);
 		}
+		if (next && !insert)
+			uksm_vma_add_new(next);
 		if (err)
 			return NULL;
 		khugepaged_enter_vma_merge(area, vm_flags);
