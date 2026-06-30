@@ -1203,7 +1203,7 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			 */
 			area = next;
 		}
-		if (next && !insert)
+		if (next)
 			uksm_vma_add_new(next);
 		if (err)
 			return NULL;
