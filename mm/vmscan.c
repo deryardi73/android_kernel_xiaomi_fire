@@ -4439,7 +4439,7 @@ static int evict_pages(struct lruvec *lruvec, struct scan_control *sc, int swapp
 static long get_nr_to_scan(struct lruvec *lruvec, struct scan_control *sc, bool can_swap,
 		unsigned long reclaimed, bool *need_aging)
 {
-	int priority
+	int priority;
 	long nr_to_scan;
 	struct mem_cgroup *memcg = lruvec_memcg(lruvec);
 	DEFINE_MAX_SEQ(lruvec);
