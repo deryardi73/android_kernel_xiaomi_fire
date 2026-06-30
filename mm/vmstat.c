@@ -1167,7 +1167,9 @@ const char * const vmstat_text[] = {
 	"nr_written",
 	"nr_kernel_misc_reclaimable",
 	"nr_unreclaimable_pages",
-
+#ifdef CONFIG_UKSM
+	"nr_uksm_zero_pages",
+#endif
 
 	"nr_ion_heap",
 	"nr_ion_heap_pool",
