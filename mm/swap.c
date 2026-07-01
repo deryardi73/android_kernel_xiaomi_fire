@@ -574,7 +574,7 @@ static void lru_deactivate_file_fn(struct page *page, struct lruvec *lruvec,
 		 * The page's writeback ends up during pagevec
 		 * We moves tha page into tail of inactive.
 		 */
-		add_page_to_lru_list(page, lruvec);
+		add_page_to_lru_list_tail(page, lruvec);
 		__count_vm_event(PGROTATED);
 	}
 
@@ -824,7 +824,7 @@ void release_pages(struct page **pages, int nr)
 			}
 
 			lruvec = mem_cgroup_page_lruvec(page, locked_pgdat);
-			del_page_from_lru_list(page, lruvec); 
+			del_page_from_lru_list(page, lruvec);
 			__clear_page_lru_flags(page);
 		}
 
@@ -888,8 +888,6 @@ void lru_add_page_tail(struct page *page, struct page *page_tail,
 		 * Head page has not yet been counted, as an hpage,
 		 * so we must account for each subpage individually.
 		 *
-		 * Use the standard add function to put page_tail on the list,
-		 * but then correct its position so they all end up in order.
 		 * Put page_tail on the list at the correct position
 		 * so they all end up in order.
 		 */
