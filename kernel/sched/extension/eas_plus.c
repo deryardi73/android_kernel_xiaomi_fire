@@ -114,7 +114,7 @@ static inline void fillin_cluster(struct cluster_info *cinfo,
 
 	for_each_cpu(cpu, &pod->possible_cpus) {
 		cpu_perf = arch_scale_cpu_capacity(NULL, cpu);
-		pr_info("cpu=%d, cpu_perf=%lu\n", cpu, cpu_perf);
+		pr_debug("cpu=%d, cpu_perf=%lu\n", cpu, cpu_perf);
 		if (cpu_perf > 0)
 			break;
 	}
@@ -149,7 +149,7 @@ void init_perf_order_domains(struct perf_domain *pd)
 	struct upower_tbl *tbl;
 	int cpu;
 
-	pr_info("Initializing perf order domain:\n");
+	pr_debug("Initializing perf order domain:\n");
 
 	if (!pd) {
 		pr_info("Perf domain is not ready!\n");
@@ -178,9 +178,9 @@ void init_perf_order_domains(struct perf_domain *pd)
 	 * Sorting Perf domain by CPU capacity
 	 */
 	list_sort(NULL, &perf_order_domains, &perf_domain_compare);
-	pr_info("Sort perf_domains from little to big:\n");
+	pr_debug("Sort perf_domains from little to big:\n");
 	for_each_perf_domain_ascending(domain) {
-		pr_info("    cpumask: 0x%02lx\n",
+		pr_debug("    cpumask: 0x%02lx\n",
 				*cpumask_bits(&domain->possible_cpus));
 	}
 
@@ -192,14 +192,14 @@ void init_perf_order_domains(struct perf_domain *pd)
 	for_each_possible_cpu(cpu) {
 		tbl = upower_get_core_tbl(cpu);
 		if (arch_scale_cpu_capacity(NULL, cpu) != tbl->row[tbl->row_num - 1].cap) {
-			pr_info("arch_scale_cpu_capacity(%d)=%lu, tbl->row[last_idx].cap=%llu\n",
+			pr_debug("arch_scale_cpu_capacity(%d)=%lu, tbl->row[last_idx].cap=%llu\n",
 				cpu, arch_scale_cpu_capacity(NULL, cpu),
 				tbl->row[tbl->row_num - 1].cap);
 			topology_set_cpu_scale(cpu, tbl->row[tbl->row_num - 1].cap);
 		}
 	}
 
-	pr_info("Initializing perf order domain done\n");
+	pr_debug("Initializing perf order domain done\n");
 }
 EXPORT_SYMBOL(init_perf_order_domains);
 
