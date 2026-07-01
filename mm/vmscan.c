@@ -171,7 +171,7 @@ struct scan_control {
 /*
  * From 0 .. 200.  Higher means more swappy.
  */
-int vm_swappiness = 60;
+int vm_swappiness = 80;
 /*
  * The total number of pages which are beyond the high watermark within all
  * zones.
@@ -1167,7 +1167,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		if (!sc->may_unmap && page_mapped(page))
 			goto keep_locked;
 
-			/* page_update_gen() tried to promote this page? */
+		/* page_update_gen() tried to promote this page? */
 		if (lru_gen_enabled() && !force_reclaim &&
 		    page_mapped(page) && PageReferenced(page))
 			goto keep_locked;
@@ -2563,7 +2563,6 @@ DEFINE_STATIC_KEY_ARRAY_TRUE(lru_gen_caps, NR_LRU_GEN_CAPS);
 DEFINE_STATIC_KEY_ARRAY_FALSE(lru_gen_caps, NR_LRU_GEN_CAPS);
 #endif
 
-
 /******************************************************************************
  *                          shorthand helpers
  ******************************************************************************/
@@ -3531,7 +3530,7 @@ restart:
 			if (!pmd_young(val))
 				continue;
 
-		walk_pmd_range_locked(pud, addr, vma, walk, &pos);
+			walk_pmd_range_locked(pud, addr, vma, walk, &pos);
 		}
 #endif
 		if (!priv->full_scan && !test_bloom_filter(priv->lruvec, priv->max_seq, pmd + i))
@@ -4449,6 +4448,7 @@ static long get_nr_to_scan(struct lruvec *lruvec, struct scan_control *sc, bool 
 	if (!nr_to_scan)
 		return 0;
 
+
 	if (!mem_cgroup_online(memcg))
 		priority = 0;
 	else if (sc->nr_reclaimed - reclaimed >= sc->nr_to_reclaim)
@@ -4457,7 +4457,6 @@ static long get_nr_to_scan(struct lruvec *lruvec, struct scan_control *sc, bool 
 		priority = sc->priority;
 
 	nr_to_scan >>= priority;
-
 	if (!nr_to_scan)
 		return 0;
 
@@ -4693,7 +4692,7 @@ unlock:
  *                          sysfs interface
  ******************************************************************************/
 
- static ssize_t show_min_ttl(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+static ssize_t show_min_ttl(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%u\n", jiffies_to_msecs(READ_ONCE(lru_gen_min_ttl)));
 }
@@ -6367,6 +6366,12 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int classzone_idx)
 		if (raise_priority || !nr_reclaimed)
 			sc.priority--;
 	} while (sc.priority >= 1);
+
+	if (!sc.nr_reclaimed) {
+		count_vm_event(LRU_KSWAPD_NO_PROGRESS);
+		if (!lru_gen_enabled())
+			pgdat->kswapd_failures++;
+	}
 
 out:
 	snapshot_refaults(NULL, pgdat);
