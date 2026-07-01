@@ -58,6 +58,7 @@ struct bpf_cgroup_storage {
 	struct bpf_cgroup_storage_map *map;
 	struct bpf_cgroup_storage_key key;
 	struct list_head list_map;
+	struct list_head list;
 	struct list_head list_cg;
 	struct rb_node node;
 	struct rcu_head rcu;
