@@ -824,7 +824,7 @@ void msdc_set_mclk(struct msdc_host *host, unsigned char timing, u32 hz)
 	/* need because clk changed.*/
 	host->max_busy_timeout_ms = msdc_max_busy_timeout_ms(host);
 	msdc_set_timeout(host, host->timeout_ns, host->timeout_clks);
-	pr_info("msdc%d -> !!! Set<%dKHz> Source<%dKHz> -> sclk<%dKHz> timing<%d> mode<%d> div<%d> hs400_div_dis<%d>\n",
+	pr_debug("msdc%d -> !!! Set<%dKHz> Source<%dKHz> -> sclk<%dKHz> timing<%d> mode<%d> div<%d> hs400_div_dis<%d>\n",
 		host->id, hz/1000, hclk/1000, sclk/1000, (int)timing, mode, div,
 		hs400_div_dis);
 
@@ -2423,7 +2423,7 @@ check_fifo_end:
 	if (hmpage != NULL) {
 		for (i = 0; i < totalpages; i++)
 			kunmap(hmpage + i);
-		pr_info("msdc0 write unmap 0x%x:\n", left);
+		pr_debug("msdc0 write unmap 0x%x:\n", left);
 	}
 	data->bytes_xfered += size;
 	N_MSG(FIO, "        PIO Write<%d>bytes", size);
@@ -3301,7 +3301,7 @@ static int msdc_do_discard_task_cq(struct mmc_host *mmc,
 
 	msdc_do_command(host, &mmc->deq_cmd, CMD_TIMEOUT);
 
-	pr_info("[%s]: msdc%d, discard task id %d, CMD<%d> arg<0x%08x> rsp<0x%08x>",
+	pr_debug("[%s]: msdc%d, discard task id %d, CMD<%d> arg<0x%08x> rsp<0x%08x>",
 		__func__, host->id, task_id, mmc->deq_cmd.opcode,
 		mmc->deq_cmd.arg, mmc->deq_cmd.resp[0]);
 
@@ -3535,13 +3535,13 @@ int msdc_error_tuning(struct mmc_host *mmc,  struct mmc_request *mrq)
 	}
 
 	if (mrq)
-		pr_info("%s: host->need_tune : 0x%x CMD<%d>\n", __func__,
+		pr_debug("%s: host->need_tune : 0x%x CMD<%d>\n", __func__,
 			host->need_tune, mrq->cmd->opcode);
 
 	status = host->device_status;
 	/* clear device status */
 	host->device_status = 0x0;
-	pr_info("msdc%d saved device status: %x", host->id, status);
+	pr_debug("msdc%d saved device status: %x", host->id, status);
 
 	if (host->hw->host_function == MSDC_SDIO) {
 		host->need_tune = TUNE_NONE;
@@ -3644,7 +3644,7 @@ recovery:
 		if (host->hw->host_function == MSDC_SD)
 			ret = sdcard_reset_tuning(mmc);
 	} else if (!tune_smpl) {
-		pr_info("msdc%d autok pass\n", host->id);
+		pr_debug("msdc%d autok pass\n", host->id);
 		host->need_tune |= TUNE_AUTOK_PASS;
 	}
 
@@ -4064,7 +4064,7 @@ int msdc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	 * and autok error when mode incorrect.
 	 */
 	if ((host->hw->host_function == MSDC_SDIO) && (mmc->doing_retune)) {
-		pr_info("msdc%d: mmc retune do nothing\n", host->id);
+		pr_debug("msdc%d: mmc retune do nothing\n", host->id);
 		return 0;
 	}
 
@@ -4475,7 +4475,7 @@ static int msdc_card_busy(struct mmc_host *mmc)
 	status = MSDC_READ32(MSDC_PS);
 	if (((status >> 16) & 0x1) != 0x1) {
 		if (host->hw->host_function == MSDC_SDIO)
-			pr_info("msdc%d: card is busy!\n", host->id);
+			pr_debug("msdc%d: card is busy!\n", host->id);
 		return 1;
 	}
 
