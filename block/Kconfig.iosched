@@ -43,7 +43,7 @@ config CFQ_GROUP_IOSCHED
 choice
 
 	prompt "Default I/O scheduler"
-	default DEFAULT_MQ_IOSCHED_SSG
+	default DEFAULT_MQ_ZEN
 	help
 	  Select the I/O scheduler which will be used by default for all
 	  block devices.
@@ -53,6 +53,9 @@ choice
 
 	config DEFAULT_MQ_DEADLINE
 		bool "MQ-Deadline" if MQ_IOSCHED_DEADLINE=y
+
+	config DEFAULT_MQ_ZEN
+		bool "MQ-Zen" if MQ_IOSCHED_ZEN=y
 
 	config DEFAULT_DEADLINE
 		bool "Deadline" if IOSCHED_DEADLINE=y
@@ -69,6 +72,7 @@ config DEFAULT_IOSCHED
 	string
 	default "ssg" if DEFAULT_MQ_IOSCHED_SSG
 	default "mq-deadline" if DEFAULT_MQ_DEADLINE
+	default "mq-zen" if DEFAULT_MQ_ZEN
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
 	default "noop" if DEFAULT_NOOP
@@ -101,6 +105,12 @@ config MQ_IOSCHED_SSG_CGROUP
 	depends on MQ_IOSCHED_SSG
 	---help---
 	  Control Group for SamSung Generic IO scheduler.
+
+config MQ_IOSCHED_ZEN
+	tristate "MQ Zen I/O scheduler.
+	default y
+	---help---
+	  MQ version of the zen IO scheduler.
 
 config IOSCHED_BFQ
 	tristate "BFQ I/O scheduler"
