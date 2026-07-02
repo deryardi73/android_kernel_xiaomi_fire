@@ -1068,7 +1068,7 @@ static void msdc_set_mclk(struct msdc_host *host, unsigned char timing, u32 hz)
 		cpu_relax();
 	if (host->mclk == 0 && (mmc->caps2 & MMC_CAP2_NO_MMC)
 		&& mmc->ios.signal_voltage == MMC_SIGNAL_VOLTAGE_180) {
-		dev_info(host->dev, "[%s]:enable clk free run 1ms+ for switch to 1.8v\n",
+		dev_dbg(host->dev, "[%s]:enable clk free run 1ms+ for switch to 1.8v\n",
 			__func__);
 		sdr_set_bits(host->base + MSDC_CFG, MSDC_CFG_CKPDN);
 		usleep_range(1000, 1500);
@@ -1120,7 +1120,7 @@ static void msdc_set_mclk(struct msdc_host *host, unsigned char timing, u32 hz)
 		sdr_set_field(host->base + tune_reg,
 			      MSDC_PAD_TUNE_CMDRRDLY,
 			      host->hs400_cmd_int_delay);
-	dev_info(host->dev, "sclk: %d, timing: %d\n", host->mmc->actual_clock,
+	dev_dbg(host->dev, "sclk: %d, timing: %d\n", host->mmc->actual_clock,
 		timing);
 }
 
@@ -2069,7 +2069,7 @@ static struct msdc_delay_phase get_best_delay(struct msdc_host *host, u32 delay)
 		final_phase = (start_final + len_final / 3) % PAD_DELAY_MAX;
 	else
 		final_phase = (start_final + len_final / 2) % PAD_DELAY_MAX;
-	dev_info(host->dev, "phase: [map:%x] [maxlen:%d] [final:%d]\n",
+	dev_dbg(host->dev, "phase: [map:%x] [maxlen:%d] [final:%d]\n",
 		 delay, len_final, final_phase);
 
 	delay_phase.maxlen = len_final;
@@ -2114,7 +2114,7 @@ static int sd_tune_response(struct mmc_host *mmc, u32 opcode)
 	final_delay = final_cmd_delay.final_phase;
 	top_sdr_set_field(host->top_base + 8, MSDC1_CMD_DELAY, final_delay);
 
-	dev_info(host->dev, "Final cmd pad delay: %x\n", final_delay);
+	dev_dbg(host->dev, "Final cmd pad delay: %x\n", final_delay);
 	return final_delay == 0xff ? -EIO : 0;
 }
 
@@ -2157,7 +2157,7 @@ static int sd_tune_data(struct mmc_host *mmc, u32 opcode)
 	top_sdr_set_field(host->top_base + 4, MSDC1_DAT2_DELAY, final_delay);
 	top_sdr_set_field(host->top_base + 4, MSDC1_DAT3_DELAY, final_delay);
 
-	dev_info(host->dev, "edge: %d, data pad delay: 0x%x\n",
+	dev_dbg(host->dev, "edge: %d, data pad delay: 0x%x\n",
 		 edge, data_delay);
 	return final_delay == 0xff ? -EIO : 0;
 }
@@ -2472,7 +2472,7 @@ static int msdc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	struct msdc_host *host = mmc_priv(mmc);
 	int ret;
 	u32 tune_reg = host->dev_comp->pad_tune_reg;
-	dev_info(host->dev, "%s\n", __func__);
+	dev_dbg(host->dev, "%s\n", __func__);
 	if (host->dev_comp->data_tune && host->dev_comp->async_fifo) {
 		ret = msdc_tune_together(mmc, opcode);
 		if (host->hs400_mode) {
@@ -2599,7 +2599,7 @@ static int msdc_execute_hs400_tuning(struct mmc_host *mmc, struct mmc_card *card
 
 	dly1_delay = get_best_delay(host, result_dly1);
 	if (dly1_delay.maxlen == 0) {
-		dev_info(host->dev, "Failed to get DLY1 delay!\n");
+		dev_err(host->dev, "Failed to get DLY1 delay!\n");
 		goto fail;
 	}
 	if (host->top_base)
@@ -2611,16 +2611,16 @@ static int msdc_execute_hs400_tuning(struct mmc_host *mmc, struct mmc_card *card
 
 	if (host->top_base) {
 		val = readl(host->top_base + EMMC50_PAD_DS_TUNE);
-		dev_info(host->dev, "Fianl EMMC50_PAD_DS_TUNE: 0x%x\n", val);
+		dev_dbg(host->dev, "Fianl EMMC50_PAD_DS_TUNE: 0x%x\n", val);
 	} else {
 		val = readl(host->base + PAD_DS_TUNE);
-		dev_info(host->dev, "Fianl PAD_DS_TUNE: 0x%x\n", val);
+		dev_dbg(host->dev, "Fianl PAD_DS_TUNE: 0x%x\n", val);
 	}
 
 	return 0;
 
 fail:
-	dev_info(host->dev, "Failed to tuning DS pin delay!\n");
+	dev_err(host->dev, "Failed to tuning DS pin delay!\n");
 	return -EIO;
 }
 
@@ -2771,14 +2771,14 @@ static int check_boot_type(struct platform_device *pdev)
 		tags = (struct tag_bootmode *)of_get_property(node,
 				"atag,boot", (int *)&size);
 	} else
-		dev_info(&pdev->dev, "of_chosen not found\n");
+		dev_dbg(&pdev->dev, "of_chosen not found\n");
 
 	if (tags) {
 		ret = tags->boottype;
 		if ((ret > 2) || (ret < 0))
 			ret = BOOTDEV_SDMMC;
 	} else {
-		dev_info(&pdev->dev, "atag,boot is not found\n");
+		dev_dbg(&pdev->dev, "atag,boot is not found\n");
 	}
 
 	return ret;
@@ -2844,12 +2844,12 @@ static int msdc_drv_probe(struct platform_device *pdev)
 
 	/* Add check_boot_type check and return ENODEV if not eMMC boot */
 	if (device_property_read_u32(&pdev->dev, "host-index", &host_index) < 0) {
-		dev_info(&pdev->dev, "index property is missing \n");
+		dev_dbg(&pdev->dev, "index property is missing \n");
 		host_index = -1;
 	}
 	boot_type = check_boot_type(pdev);
 	if ((boot_type != BOOTDEV_SDMMC) && (host_index == 0)) {
-		dev_info(&pdev->dev, "no eMMC boot\n");
+		dev_dbg(&pdev->dev, "no eMMC boot\n");
 		return -ENODEV;
 	}
 
@@ -2868,16 +2868,16 @@ static int msdc_drv_probe(struct platform_device *pdev)
 	/* device rename */
 	if (boot_type == BOOTDEV_SDMMC){
 		if ((mmc->index == 0) && !device_rename(mmc->parent, "bootdevice"))
-			dev_info(&pdev->dev, "[msdc%d] rename to bootdevice.\n", mmc->index);
+			dev_dbg(&pdev->dev, "[msdc%d] rename to bootdevice.\n", mmc->index);
 		else if ((mmc->index == 1) && !device_rename(mmc->parent, "externdevice"))
-			dev_info(&pdev->dev, "[msdc%d] rename to externdevice.\n",mmc->index);
+			dev_dbg(&pdev->dev, "[msdc%d] rename to externdevice.\n",mmc->index);
 		else if ((mmc->index == 0) || (mmc->index == 1))
-			dev_info(&pdev->dev, "[msdc%d] error: rename faile.\n", mmc->index);
+			dev_warn(&pdev->dev, "[msdc%d] error: rename faile.\n", mmc->index);
 	} else if (boot_type == BOOTDEV_UFS){
 		if ((mmc->index == 0) && !device_rename(mmc->parent, "externdevice"))
-			dev_info(&pdev->dev, "[msdc%d] rename to externdevice.\n",mmc->index);
+			dev_dbg(&pdev->dev, "[msdc%d] rename to externdevice.\n",mmc->index);
 		else
-			dev_info(&pdev->dev, "[msdc%d] error: rename faile.\n", mmc->index);
+			dev_warn(&pdev->dev, "[msdc%d] error: rename faile.\n", mmc->index);
 	}
 
 	dup_name = pdev->name;
@@ -2894,7 +2894,7 @@ static int msdc_drv_probe(struct platform_device *pdev)
 #endif
 
 	if (device_property_read_u32(&pdev->dev, "host-function", &mmc->host_function) <0){
-		dev_info(&pdev->dev, "host_function isn't found in device tree\n");
+		dev_dbg(&pdev->dev, "host_function isn't found in device tree\n");
 		mmc->host_function = -1;
 	}
 
