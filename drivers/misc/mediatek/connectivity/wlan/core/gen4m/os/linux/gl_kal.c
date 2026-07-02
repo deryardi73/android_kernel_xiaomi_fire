@@ -7891,7 +7891,7 @@ void kalSetPerfReport(IN struct ADAPTER *prAdapter)
 			prCmdPerfReport->ulCurRxBytes[1],
 			prCmdPerfReport->ulCurRxBytes[2],
 			prCmdPerfReport->ulCurRxBytes[3]);
-		DBGLOG(SW4, INFO,
+		DBGLOG(SW4, TRACE,
 			"Rate[%d][%d][%d][%d] RCPI[%d][%d][%d][%d]\n",
 			prCmdPerfReport->u2CurRxRate[0],
 			prCmdPerfReport->u2CurRxRate[1],
@@ -7966,7 +7966,7 @@ inline int32_t kalPerMonInit(IN struct GLUE_INFO
 	/* enable rps on all cpu cores */
 	kalSetRpsMap(prGlueInfo, 0xff);
 	KAL_SET_BIT(PERF_MON_INIT_BIT, prPerMonitor->ulPerfMonFlag);
-	DBGLOG(SW4, INFO, "exit %s\n", __func__);
+	DBGLOG(SW4, TRACE, "exit %s\n", __func__);
 	return 0;
 }
 
@@ -7977,7 +7977,7 @@ inline int32_t kalPerMonDisable(IN struct GLUE_INFO
 
 	prPerMonitor = &prGlueInfo->prAdapter->rPerMonitor;
 
-	DBGLOG(SW4, INFO, "enter %s\n", __func__);
+	DBGLOG(SW4, TRACE, "enter %s\n", __func__);
 	if (KAL_TEST_BIT(PERF_MON_RUNNING_BIT,
 			 prPerMonitor->ulPerfMonFlag)) {
 		DBGLOG(SW4, TRACE, "need to stop before disable\n");
@@ -7996,7 +7996,7 @@ inline int32_t kalPerMonEnable(IN struct GLUE_INFO
 
 	prPerMonitor = &prGlueInfo->prAdapter->rPerMonitor;
 
-	DBGLOG(SW4, INFO, "enter %s\n", __func__);
+	DBGLOG(SW4, TRACE, "enter %s\n", __func__);
 	KAL_CLR_BIT(PERF_MON_DISABLE_BIT,
 		    prPerMonitor->ulPerfMonFlag);
 	DBGLOG(SW4, TRACE, "exit %s\n", __func__);
@@ -8033,7 +8033,7 @@ inline int32_t kalPerMonStart(IN struct GLUE_INFO
 	KAL_SET_BIT(PERF_MON_RUNNING_BIT,
 		    prPerMonitor->ulPerfMonFlag);
 	KAL_CLR_BIT(PERF_MON_STOP_BIT, prPerMonitor->ulPerfMonFlag);
-	DBGLOG(SW4, INFO, "perf monitor started\n");
+	DBGLOG(SW4, TRACE, "perf monitor started\n");
 	return 0;
 }
 
@@ -8072,7 +8072,7 @@ inline int32_t kalPerMonStop(IN struct GLUE_INFO
 			    prPerMonitor->u4TarPerfLevel,
 			    prGlueInfo->prAdapter->rWifiVar.u4BoostCpuTh);
 	}
-	DBGLOG(SW4, INFO, "perf monitor stopped\n");
+	DBGLOG(SW4, TRACE, "perf monitor stopped\n");
 	return 0;
 }
 
@@ -8083,7 +8083,7 @@ inline int32_t kalPerMonDestroy(IN struct GLUE_INFO
 
 	kalPerMonDisable(prGlueInfo);
 	KAL_CLR_BIT(PERF_MON_INIT_BIT, prPerMonitor->ulPerfMonFlag);
-	DBGLOG(SW4, INFO, "exit %s\n", __func__);
+	DBGLOG(SW4, TRACE, "exit %s\n", __func__);
 	return 0;
 }
 
@@ -8687,7 +8687,7 @@ int32_t kalPerMonSetForceEnableFlag(uint8_t uFlag)
 				       wlan_notifier_priv_data;
 
 	wlan_perf_monitor_force_enable = uFlag == 0 ? FALSE : TRUE;
-	DBGLOG(SW4, INFO,
+	DBGLOG(SW4, TRACE,
 	       "uFlag:%d, wlan_perf_monitor_ctrl_flag:%d\n", uFlag,
 	       wlan_perf_monitor_force_enable);
 
