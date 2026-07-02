@@ -200,11 +200,11 @@ int consys_hw_pwr_off(unsigned int curr_status, unsigned int off_radio)
 	int ret = 0;
 
 	if (next_status == 0) {
-		pr_info("Last power off: %d, Power off CONNSYS PART 1\n", off_radio);
+		pr_debug("Last power off: %d, Power off CONNSYS PART 1\n", off_radio);
 		consys_hw_raise_voltage(off_radio, false, true);
 		if (consys_hw_ops->consys_plt_conninfra_on_power_ctrl)
 			consys_hw_ops->consys_plt_conninfra_on_power_ctrl(0);
-		pr_info("Power off CONNSYS PART 2\n");
+		pr_debug("Power off CONNSYS PART 2\n");
 		if (consys_hw_ops->consys_plt_set_if_pinmux)
 			consys_hw_ops->consys_plt_set_if_pinmux(0);
 		if (consys_hw_ops->consys_plt_clock_buffer_ctrl)
@@ -213,7 +213,7 @@ int consys_hw_pwr_off(unsigned int curr_status, unsigned int off_radio)
 		if (ret)
 			pr_info("Power off a-die power, ret=%d\n", ret);
 	} else {
-		pr_info("[%s] Part 0: only subsys (%d) off (curr_status=0x%x, next_status = 0x%x)\n",
+		pr_debug("[%s] Part 0: only subsys (%d) off (curr_status=0x%x, next_status = 0x%x)\n",
 			__func__, off_radio, curr_status, next_status);
 		ret = _consys_hw_conninfra_wakeup();
 		if (consys_hw_ops->consys_plt_subsys_status_update)
@@ -539,7 +539,7 @@ static int _consys_hw_conninfra_wakeup(void)
 		g_conninfra_wakeup_ref_cnt++;
 	}
 
-	pr_info("conninfra_wakeup refcnt=[%d]->[%d] %s",
+	pr_debug("conninfra_wakeup refcnt=[%d]->[%d] %s",
 			ref, g_conninfra_wakeup_ref_cnt, (wakeup ? "wakeup!!" : ""));
 	return 0;
 }
@@ -554,7 +554,7 @@ static void _consys_hw_conninfra_sleep(void)
 		sleep = true;
 		consys_hw_ops->consys_plt_conninfra_sleep();
 	}
-	pr_info("conninfra_sleep refcnt=[%d]->[%d] %s",
+	pr_debug("conninfra_sleep refcnt=[%d]->[%d] %s",
 			ref, g_conninfra_wakeup_ref_cnt, (sleep ? "sleep!!" : ""));
 }
 
@@ -629,7 +629,7 @@ int consys_hw_tcxo_parser(struct platform_device *pdev)
 	if (!ret) {
 		if (strcmp(tcxo_support, "true") == 0) {
 			conn_hw_env.tcxo_support = true;
-			pr_info("[%s] Support TCXO", __func__);
+			pr_debug("[%s] Support TCXO", __func__);
 		}
 	} else {
 		pr_warn("Get tcxo property fail: %d", ret);
@@ -651,7 +651,7 @@ int consys_hw_tcxo_parser(struct platform_device *pdev)
 
 				if (ret == 0) {
 					pin_num = (pinmux >> 8) & 0xff;
-					pr_info("Conninfra gpio pin number[%d]\n", pin_num);
+					pr_debug("Conninfra gpio pin number[%d]\n", pin_num);
 				} else {
 					pr_err("Fail to get conninfra gpio pin number");
 				}
@@ -659,7 +659,7 @@ int consys_hw_tcxo_parser(struct platform_device *pdev)
 		}
 	}
 
-	pr_info("[%s] tcxo=%d pintctrl=%p", __func__,
+	pr_debug("[%s] tcxo=%d pintctrl=%p", __func__,
 		conn_hw_env.tcxo_support, g_conninfra_pinctrl_ptr);
 	return 0;
 }
@@ -863,7 +863,7 @@ int consys_hw_init(struct conninfra_dev_cb *dev_cb)
 	if (ret < 0)
 		pr_notice("%s register_pm_notifier fail %d\n", __func__, ret);
 
-	pr_info("[consys_hw_init] result [%d]\n", iRet);
+	pr_debug("[consys_hw_init] result [%d]\n", iRet);
 
 	return iRet;
 }
