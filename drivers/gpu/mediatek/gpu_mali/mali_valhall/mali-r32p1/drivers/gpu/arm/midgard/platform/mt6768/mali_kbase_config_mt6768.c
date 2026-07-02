@@ -298,7 +298,7 @@ int mtk_platform_device_init(struct kbase_device *kbdev)
 		return -1;
 	}
 
-	mali_pr_info("@%s: initialize successfully\n", __func__);
+	mali_pr_debug("@%s: initialize successfully\n", __func__);
 	return 0;
 }
 
@@ -316,7 +316,7 @@ int mtk_platform_init(struct platform_device *pdev, struct kbase_device *kbdev)
 		return -1;
 	}
 
-	mali_pr_info("@%s: initialize successfully\n", __func__);
+	mali_pr_debug("@%s: initialize successfully\n", __func__);
 
 	return 0;
 }

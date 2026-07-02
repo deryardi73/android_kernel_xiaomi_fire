@@ -413,7 +413,7 @@ static int ged_pdrv_probe(struct platform_device *pdev)
 {
 	int err;
 
-	GED_LOGI("@%s: start to probe ged driver\n", __func__);
+	GED_LOGD("@%s: start to probe ged driver\n", __func__);
 
 	if (proc_create(GED_DRIVER_DEVICE_NAME, 0644, NULL, &ged_fops)
 		== NULL) {
@@ -542,7 +542,7 @@ static int ged_pdrv_probe(struct platform_device *pdev)
 	}
 #endif /* CONFIG_MTK_GPU_OPP_STATS_SUPPORT */
 
-	GED_LOGI("@%s: ged driver probe done\n", __func__);
+	GED_LOGD("@%s: ged driver probe done\n", __func__);
 
 ERROR:
 	return err;
@@ -617,7 +617,7 @@ static int ged_init(void)
 {
 	GED_ERROR err = GED_ERROR_FAIL;
 
-	GED_LOGI("@%s: start to initialize ged driver\n", __func__);
+	GED_LOGD("@%s: start to initialize ged driver\n", __func__);
 
 	/* register platform driver */
 	err = platform_driver_register(&g_ged_pdrv);
@@ -626,7 +626,7 @@ static int ged_init(void)
 		goto ERROR;
 	}
 
-	GED_LOGI("@%s: ged driver init done\n", __func__);
+	GED_LOGD("@%s: ged driver init done\n", __func__);
 
 ERROR:
 	return err;

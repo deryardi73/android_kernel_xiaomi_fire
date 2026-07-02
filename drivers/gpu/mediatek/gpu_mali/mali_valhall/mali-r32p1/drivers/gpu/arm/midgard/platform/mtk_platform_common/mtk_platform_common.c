@@ -204,7 +204,7 @@ int mtk_set_mt_gpufreq_clock_parking(int clksrc)
 	if (mtk_common_pm_is_mfg_active())
 		ret = mt_gpufreq_clock_parking(clksrc);
 	else
-		pr_info("MALI: set clock parking at power off\n");
+		pr_debug("MALI: set clock parking at power off\n");
 
 	return ret;
 }

@@ -25,7 +25,7 @@ static int debug = DEBUG_OFF;
 			if (debug == DEBUG_ON) \
 				pr_debug(GPU_TUNER_TAG fmt, ##args); \
 		} while (0)
-#define GPU_TUNER_INFO(fmt, args...) pr_info(GPU_TUNER_TAG fmt, ##args)
+#define GPU_TUNER_INFO(fmt, args...) pr_debug(GPU_TUNER_TAG fmt, ##args)
 #define GPU_TUNER_ERROR(fmt, args...) pr_info(GPU_TUNER_TAG fmt, ##args)
 
 static GED_ERROR _tolower_s(
