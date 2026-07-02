@@ -100,7 +100,7 @@ static unsigned short const crc16_table[256] = {
 	0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040
 };
 
-int ftrace_flag = 1;
+int ftrace_flag;
 
 static unsigned long __read_mostly mark_addr;
 static unsigned int g_pid;
