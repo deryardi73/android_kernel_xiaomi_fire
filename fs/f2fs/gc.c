@@ -279,17 +279,49 @@ static unsigned int get_cb_cost(struct f2fs_sb_info *sbi, unsigned int segno)
 	return UINT_MAX - ((100 * (100 - u) * age) / (100 + u));
 }
 
+static unsigned char get_seg_age(struct f2fs_sb_info *sbi, unsigned int segno)
+{
+	struct sit_info *sit_i = SIT_I(sbi);
+	unsigned int secno = GET_SEC_FROM_SEG(sbi, segno);
+	unsigned int start = GET_SEG_FROM_SEC(sbi, secno);
+	unsigned long long mtime = 0;
+	unsigned char age = 0;
+	unsigned int i;
+ 
+	for (i = 0; i < sbi->segs_per_sec; i++)
+		mtime += get_seg_entry(sbi, start + i)->mtime;
+	mtime = div_u64(mtime, sbi->segs_per_sec);
+ 
+	/* Handle if the system time has changed by the user */
+	if (mtime < sit_i->min_mtime)
+		sit_i->min_mtime = mtime;
+	if (mtime > sit_i->max_mtime)
+		sit_i->max_mtime = mtime;
+	if (sit_i->max_mtime != sit_i->min_mtime)
+		age = 100 - div64_u64(100 * (mtime - sit_i->min_mtime),
+				sit_i->max_mtime - sit_i->min_mtime);
+ 
+	return age;
+}
+
 static inline unsigned int get_gc_cost(struct f2fs_sb_info *sbi,
 			unsigned int segno, struct victim_sel_policy *p)
 {
+	unsigned int vblocks;
+ 
 	if (p->alloc_mode == SSR)
 		return get_seg_entry(sbi, segno)->ckpt_valid_blocks;
-
+ 
 	/* alloc_mode == LFS */
-	if (p->gc_mode == GC_GREEDY)
-		return get_valid_blocks(sbi, segno, true);
-	else
+	if (p->gc_mode == GC_CB)
 		return get_cb_cost(sbi, segno);
+ 
+	/* GC_GREEDY, age-weighted tiebreak */
+	vblocks = get_valid_blocks(sbi, segno, true);
+	if (!vblocks)
+		return 0;
+ 
+	return (vblocks * 100) - get_seg_age(sbi, segno);
 }
 
 static unsigned int count_bits(const unsigned long *addr,
