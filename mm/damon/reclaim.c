@@ -27,7 +27,7 @@
  * condition.  Refer to below descriptions for the watermarks parameter for
  * this.
  */
-static bool enabled __read_mostly;
+static bool enabled __read_mostly = true;
 module_param(enabled, bool, 0600);
 
 /*
@@ -36,7 +36,7 @@ module_param(enabled, bool, 0600);
  * If a memory region is not accessed for this or longer time, DAMON_RECLAIM
  * identifies the region as cold, and reclaims.  120 seconds by default.
  */
-static unsigned long min_age __read_mostly = 120000000;
+static unsigned long min_age __read_mostly = 5000000;
 module_param(min_age, ulong, 0600);
 
 /*
@@ -49,7 +49,7 @@ module_param(min_age, ulong, 0600);
  *
  * 10 ms by default.
  */
-static unsigned long quota_ms __read_mostly = 10;
+static unsigned long quota_ms __read_mostly = 15;
 module_param(quota_ms, ulong, 0600);
 
 /*
@@ -224,11 +224,11 @@ static bool get_monitoring_region(unsigned long *start, unsigned long *end)
 static struct damos *damon_reclaim_new_scheme(void)
 {
 	struct damos_watermarks wmarks = {
-		.metric = DAMOS_WMARK_FREE_MEM_RATE,
-		.interval = wmarks_interval,
-		.high = wmarks_high,
-		.mid = wmarks_mid,
-		.low = wmarks_low,
+		.metric = DAMOS_WMARK_NONE,
+		.interval = 0,
+		.high = 0,
+		.mid = 0,
+		.low = 0,
 	};
 	struct damos_quota quota = {
 		/*
