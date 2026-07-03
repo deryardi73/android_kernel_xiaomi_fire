@@ -76,6 +76,7 @@
  * ----------------------------------------------------------------------
  */
 #include <linux/kernel.h>
+#include <linux/ktime.h>
 #include <linux/fs.h>
 #include <linux/blkdev.h>
 #include <linux/blk-mq.h>
@@ -96,6 +97,12 @@ static const int sync_expire  = HZ / 4;    /* max time before a sync is submitte
 static const int async_expire = 2 * HZ;    /* ditto for async, these limits are SOFT! */
 static const int fifo_batch = 16;          /* sequential requests treated as one batch */
 static const int writes_starved = 2;       /* max times reads can starve a write */
+/*
+ * 8ms: reasonable single-command-slot eMMC write completion target.
+ * Above this, dynamic_batch shrinks so overdue requests get rechecked
+ * sooner instead of waiting behind a full write batch.
+ */
+static const int target_write_lat_ns = 8 * 1000 * 1000;
 
 /*
  * Non-tunable safety valve: once this many requests have been
@@ -131,11 +138,24 @@ struct zen_data {
 	/* discard starvation bookkeeping */
 	unsigned int discard_batching;	/* dispatches since a discard last went out */
 
+	/*
+	 * v3: adaptive batch throttling. dynamic_batch is the effective
+	 * threshold actually used in place of fifo_batch -- it shrinks
+	 * when observed write completion latency rises above target
+	 * (device is busy/slow, so check for overdue reads/writes sooner)
+	 * and grows back toward fifo_batch when latency is healthy. This
+	 * is the same spirit as kyber's latency-target throttling, scaled
+	 * down to a single knob instead of a full per-class token bucket.
+	 */
+	u64 avg_write_lat_ns;		/* EWMA of write completion latency */
+	unsigned int dynamic_batch;	/* current adaptive batching threshold */
+
 	/* tunables */
 	int fifo_expire[2];
 	int fifo_batch;
 	int front_merges;
 	int writes_starved;
+	int target_write_lat_ns;	/* latency target driving dynamic_batch */
 
 	spinlock_t lock;
 };
@@ -440,7 +460,7 @@ static struct request *__zen_dispatch_request(struct zen_data *zdata)
 	}
 
 	/* check for and issue expired requests first */
-	if (zdata->batching > zdata->fifo_batch) {
+	if (zdata->batching > zdata->dynamic_batch) {
 		zdata->batching = 0;
 		rq = zen_check_fifo(zdata);
 	}
@@ -466,6 +486,41 @@ static struct request *__zen_dispatch_request(struct zen_data *zdata)
 done:
 	rq->rq_flags |= RQF_STARTED;
 	return rq;
+}
+
+/*
+ * v3 adaptive hook: called by blk-mq when a request completes.
+ * Tracks write completion latency (io_start_time_ns -> now) as an
+ * EWMA and steers dynamic_batch toward target_write_lat_ns. Reads are
+ * ignored here -- what we're protecting against is a slow write
+ * burst delaying everything behind it, so write latency is the
+ * signal that matters on a single-command-slot device.
+ */
+static void zen_completed_request(struct request *rq)
+{
+	struct zen_data *zdata = rq->q->elevator->elevator_data;
+	u64 lat;
+
+	if (rq_data_dir(rq) != WRITE || !rq->io_start_time_ns)
+		return;
+
+	lat = ktime_get_ns() - rq->io_start_time_ns;
+
+	/* EWMA, 1/8 weight on the new sample -- same smoothing constant
+	 * the classic Linux loadavg uses, cheap and stable enough here.
+	 */
+	if (!zdata->avg_write_lat_ns)
+		zdata->avg_write_lat_ns = lat;
+	else
+		zdata->avg_write_lat_ns =
+			(zdata->avg_write_lat_ns * 7 + lat) / 8;
+
+	if (zdata->avg_write_lat_ns > zdata->target_write_lat_ns) {
+		if (zdata->dynamic_batch > 1)
+			zdata->dynamic_batch--;
+	} else if (zdata->dynamic_batch < zdata->fifo_batch) {
+		zdata->dynamic_batch++;
+	}
 }
 
 static struct request *zen_dispatch_request(struct blk_mq_hw_ctx *hctx)
@@ -537,6 +592,9 @@ static int zen_init_queue(struct request_queue *q, struct elevator_type *e)
 	zdata->fifo_batch = fifo_batch;
 	zdata->front_merges = 1;
 	zdata->writes_starved = writes_starved;
+	zdata->target_write_lat_ns = target_write_lat_ns;
+	zdata->dynamic_batch = fifo_batch;	/* start optimistic, full batch */
+	zdata->avg_write_lat_ns = 0;
 	zdata->starved = 0;
 	zdata->discard_batching = 0;
 	spin_lock_init(&zdata->lock);
@@ -574,6 +632,7 @@ SHOW_FUNCTION(zen_async_expire_show, zdata->fifo_expire[ASYNC], 1);
 SHOW_FUNCTION(zen_fifo_batch_show, zdata->fifo_batch, 0);
 SHOW_FUNCTION(zen_front_merges_show, zdata->front_merges, 0);
 SHOW_FUNCTION(zen_writes_starved_show, zdata->writes_starved, 0);
+SHOW_FUNCTION(zen_target_write_lat_ns_show, zdata->target_write_lat_ns, 0);
 #undef SHOW_FUNCTION
 
 #define STORE_FUNCTION(__FUNC, __PTR, MIN, MAX, __CONV) \
@@ -597,6 +656,7 @@ STORE_FUNCTION(zen_async_expire_store, &zdata->fifo_expire[ASYNC], 0, INT_MAX, 1
 STORE_FUNCTION(zen_fifo_batch_store, &zdata->fifo_batch, 0, INT_MAX, 0);
 STORE_FUNCTION(zen_front_merges_store, &zdata->front_merges, 0, 1, 0);
 STORE_FUNCTION(zen_writes_starved_store, &zdata->writes_starved, INT_MIN, INT_MAX, 0);
+STORE_FUNCTION(zen_target_write_lat_ns_store, &zdata->target_write_lat_ns, 1, INT_MAX, 0);
 #undef STORE_FUNCTION
 
 #define DD_ATTR(name) \
@@ -608,6 +668,7 @@ static struct elv_fs_entry zen_attrs[] = {
 	DD_ATTR(fifo_batch),
 	DD_ATTR(front_merges),
 	DD_ATTR(writes_starved),
+	DD_ATTR(target_write_lat_ns),
 	__ATTR_NULL
 };
 
@@ -615,6 +676,7 @@ static struct elevator_type iosched_zen = {
 	.ops.mq = {
 		.insert_requests	= zen_insert_requests,
 		.dispatch_request	= zen_dispatch_request,
+		.completed_request	= zen_completed_request,
 		.prepare_request	= zen_prepare_request,
 		.finish_request		= zen_finish_request,
 		.next_request		= elv_rb_latter_request,
@@ -649,5 +711,5 @@ module_exit(zen_exit);
 
 MODULE_AUTHOR("Brandon Berhent, blk-mq port & eMMC additions");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Zen IO scheduler - blk-mq port with eMMC additions");
-MODULE_VERSION("2.1-mq");
+MODULE_DESCRIPTION("Zen IO scheduler - blk-mq port with eMMC + adaptive batching");
+MODULE_VERSION("3.0-mq");

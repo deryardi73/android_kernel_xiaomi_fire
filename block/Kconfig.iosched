@@ -107,7 +107,7 @@ config MQ_IOSCHED_SSG_CGROUP
 	  Control Group for SamSung Generic IO scheduler.
 
 config MQ_IOSCHED_ZEN
-	tristate "MQ Zen I/O scheduler.
+	tristate "MQ Zen I/O scheduler"
 	default y
 	---help---
 	  MQ version of the zen IO scheduler.
