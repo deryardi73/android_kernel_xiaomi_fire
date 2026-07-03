@@ -25,9 +25,9 @@
  *
  * NOTE ON BUCKET NAMING: exactly like the original source, "SYNC"/
  * "ASYNC" here are just labels for rq_data_dir()'s two buckets
- * (0/1), not the REQ_SYNC bio flag. This matches the original code's
- * own naming, carried over unchanged -- worth confirming this is the
- * priority order you actually want before relying on it.
+ * (0/1), not the REQ_SYNC bio flag. rq_data_dir() in this tree
+ * resolves to (op_is_write(...) ? WRITE : READ), so bucket SYNC(1)
+ * is actually the WRITE bucket and ASYNC(0) is the READ bucket.
  *
  * New in this port (eMMC has no NCQ / no hardware command reordering,
  * so software-side request shaping matters far more here than it
@@ -44,8 +44,31 @@
  *   2. Discard/TRIM isolation: REQ_OP_DISCARD requests (fstrim,
  *      filesystem discard) are routed to a separate low-priority
  *      list instead of the normal sync/async buckets, so a discard
- *      burst can't delay foreground reads. They're only dispatched
- *      when the normal buckets are empty.
+ *      burst can't delay foreground reads. A starvation counter
+ *      (DISCARD_STARVE_LIMIT) forces one discard through periodically
+ *      even under sustained load, since on an actively-used phone the
+ *      "only dispatch when both fifo lists are empty" condition can
+ *      go unmet indefinitely and fstrim would effectively never
+ *      finish.
+ *   3. Read/write starvation control: the original bucket-selection
+ *      logic always drained the WRITE bucket (labeled "SYNC") before
+ *      the READ bucket ("ASYNC"), with no limit. On a device with a
+ *      single in-flight command slot (no NCQ / no CQHCI), that means
+ *      a sustained write burst (photo save, app install, journal
+ *      commit) could delay every foreground read with nothing to cap
+ *      it. This now mirrors mq-deadline's approach in this same
+ *      tree: reads are served first, and a `writes_starved` counter
+ *      (default 2, tunable) forces a write through once reads have
+ *      starved it that many times in a row.
+ *   4. Metadata/priority fast path: REQ_META and REQ_PRIO requests
+ *      (filesystem journal commits, inode/dir metadata) are routed to
+ *      their own list and dispatched ahead of the normal read/write
+ *      batching entirely, the same way discards are isolated but at
+ *      the opposite end of the priority order. These are usually
+ *      small and rarely benefit much from sequential merging anyway,
+ *      so skipping the rb-tree/hash for them trades a small amount of
+ *      merge opportunity for a large latency win on fsync-heavy
+ *      operations that would otherwise block behind a write batch.
  *
  * Ideas not included in this pass (flag if you want them added):
  *   - adaptive fifo_batch sizing based on recent request size/streak
@@ -72,6 +95,16 @@ enum zen_data_dir { ASYNC, SYNC };
 static const int sync_expire  = HZ / 4;    /* max time before a sync is submitted. */
 static const int async_expire = 2 * HZ;    /* ditto for async, these limits are SOFT! */
 static const int fifo_batch = 16;          /* sequential requests treated as one batch */
+static const int writes_starved = 2;       /* max times reads can starve a write */
+
+/*
+ * Non-tunable safety valve: once this many requests have been
+ * dispatched from any source while the discard list is non-empty,
+ * force one discard through regardless of what else is pending.
+ * Kept as a fixed constant instead of a sysfs knob on purpose --
+ * this is a correctness/fairness backstop, not a performance dial.
+ */
+#define DISCARD_STARVE_LIMIT 128
 
 struct zen_data {
 	/* requests are present on both sort_list and fifo_list */
@@ -81,14 +114,28 @@ struct zen_data {
 	/* discards get their own low-priority, unmerged queue */
 	struct list_head discard_list;
 
+	/*
+	 * metadata/priority requests (REQ_META | REQ_PRIO) get their
+	 * own high-priority, unmerged queue -- dispatched ahead of
+	 * everything except an explicit at_head insert.
+	 */
+	struct list_head meta_list;
+
 	struct list_head dispatch;
 
 	unsigned int batching;		/* number of sequential requests made */
+
+	/* read/write starvation bookkeeping */
+	unsigned int starved;		/* times reads have starved a write */
+
+	/* discard starvation bookkeeping */
+	unsigned int discard_batching;	/* dispatches since a discard last went out */
 
 	/* tunables */
 	int fifo_expire[2];
 	int fifo_batch;
 	int front_merges;
+	int writes_starved;
 
 	spinlock_t lock;
 };
@@ -213,11 +260,13 @@ static bool zen_bio_merge(struct blk_mq_hw_ctx *hctx, struct bio *bio)
 }
 
 /*
- * add rq to rbtree, hash and fifo. Discards go to their own
- * low-priority list and skip merge bookkeeping entirely -- there's
- * little to gain merging trim ranges here, and keeping them off the
- * rb-tree/hash keeps them from ever being picked as a front-merge
- * target for real read/write bios.
+ * add rq to rbtree, hash and fifo. Metadata/priority requests bypass
+ * merge bookkeeping and go straight to their own high-priority list;
+ * discards go to their own low-priority list. Both skip merge
+ * bookkeeping entirely -- there's little to gain merging trim ranges
+ * or small metadata blocks here, and keeping them off the rb-tree/
+ * hash keeps them from ever being picked as a front-merge target for
+ * real read/write bios.
  */
 static void zen_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 			       bool at_head)
@@ -225,6 +274,11 @@ static void zen_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 	struct request_queue *q = hctx->queue;
 	struct zen_data *zdata = q->elevator->elevator_data;
 	const int dir = rq_data_dir(rq);
+
+	if (rq->cmd_flags & (REQ_META | REQ_PRIO)) {
+		list_add_tail(&rq->queuelist, &zdata->meta_list);
+		return;
+	}
 
 	if (op_is_discard(req_op(rq))) {
 		list_add_tail(&rq->queuelist, &zdata->discard_list);
@@ -314,18 +368,34 @@ zen_check_fifo(struct zen_data *zdata)
 	return NULL;
 }
 
+/*
+ * Choose the next request to dispatch out of the two direction
+ * buckets. ASYNC(0) is the READ bucket and SYNC(1) is the WRITE
+ * bucket (see the bucket-naming note in the file header). Reads are
+ * served first since this device has a single in-flight command slot
+ * and foreground reads are what the user is waiting on -- but writes
+ * are guaranteed a turn every `writes_starved` reads so a sustained
+ * write burst can't lock them out indefinitely. This mirrors
+ * mq-deadline's dd_dispatch_request() in this same tree.
+ */
 static struct request *
 zen_choose_request(struct zen_data *zdata)
 {
-	/*
-	 * Retrieve request from available fifo list.
-	 * SYNC bucket has priority over ASYNC (see the bucket-naming
-	 * note in the file header).
-	 */
-	if (!list_empty(&zdata->fifo_list[SYNC]))
-		return rq_entry_fifo(zdata->fifo_list[SYNC].next);
-	if (!list_empty(&zdata->fifo_list[ASYNC]))
+	bool reads  = !list_empty(&zdata->fifo_list[ASYNC]);
+	bool writes = !list_empty(&zdata->fifo_list[SYNC]);
+
+	if (reads) {
+		if (writes && zdata->starved++ >= zdata->writes_starved)
+			goto dispatch_writes;
+
 		return rq_entry_fifo(zdata->fifo_list[ASYNC].next);
+	}
+
+	if (writes) {
+dispatch_writes:
+		zdata->starved = 0;
+		return rq_entry_fifo(zdata->fifo_list[SYNC].next);
+	}
 
 	return NULL;
 }
@@ -346,6 +416,29 @@ static struct request *__zen_dispatch_request(struct zen_data *zdata)
 		goto done;
 	}
 
+	/* metadata/priority requests preempt everything else */
+	if (!list_empty(&zdata->meta_list)) {
+		rq = list_first_entry(&zdata->meta_list, struct request,
+				       queuelist);
+		list_del_init(&rq->queuelist);
+		goto done;
+	}
+
+	/*
+	 * discard starvation backstop: if discards have been waiting
+	 * behind normal traffic for too long, force one through now
+	 * instead of waiting for both fifo lists to fully drain.
+	 */
+	if (!list_empty(&zdata->discard_list) &&
+	    zdata->discard_batching++ >= DISCARD_STARVE_LIMIT) {
+		zdata->discard_batching = 0;
+		rq = list_first_entry(&zdata->discard_list,
+				struct request, queuelist);
+		list_del_init(&rq->queuelist);
+		rq->rq_flags |= RQF_STARTED;
+		return rq;
+	}
+
 	/* check for and issue expired requests first */
 	if (zdata->batching > zdata->fifo_batch) {
 		zdata->batching = 0;
@@ -357,6 +450,7 @@ static struct request *__zen_dispatch_request(struct zen_data *zdata)
 		if (!rq) {
 			/* nothing but discards left -- drain those */
 			if (!list_empty(&zdata->discard_list)) {
+				zdata->discard_batching = 0;
 				rq = list_first_entry(&zdata->discard_list,
 						struct request, queuelist);
 				list_del_init(&rq->queuelist);
@@ -393,6 +487,7 @@ static bool zen_has_work(struct blk_mq_hw_ctx *hctx)
 	return !list_empty_careful(&zdata->dispatch) ||
 		!list_empty_careful(&zdata->fifo_list[SYNC]) ||
 		!list_empty_careful(&zdata->fifo_list[ASYNC]) ||
+		!list_empty_careful(&zdata->meta_list) ||
 		!list_empty_careful(&zdata->discard_list);
 }
 
@@ -433,6 +528,7 @@ static int zen_init_queue(struct request_queue *q, struct elevator_type *e)
 	INIT_LIST_HEAD(&zdata->fifo_list[SYNC]);
 	INIT_LIST_HEAD(&zdata->fifo_list[ASYNC]);
 	INIT_LIST_HEAD(&zdata->discard_list);
+	INIT_LIST_HEAD(&zdata->meta_list);
 	INIT_LIST_HEAD(&zdata->dispatch);
 	zdata->sort_list[SYNC] = RB_ROOT;
 	zdata->sort_list[ASYNC] = RB_ROOT;
@@ -440,6 +536,9 @@ static int zen_init_queue(struct request_queue *q, struct elevator_type *e)
 	zdata->fifo_expire[ASYNC] = async_expire;
 	zdata->fifo_batch = fifo_batch;
 	zdata->front_merges = 1;
+	zdata->writes_starved = writes_starved;
+	zdata->starved = 0;
+	zdata->discard_batching = 0;
 	spin_lock_init(&zdata->lock);
 
 	q->elevator = eq;
@@ -474,6 +573,7 @@ SHOW_FUNCTION(zen_sync_expire_show, zdata->fifo_expire[SYNC], 1);
 SHOW_FUNCTION(zen_async_expire_show, zdata->fifo_expire[ASYNC], 1);
 SHOW_FUNCTION(zen_fifo_batch_show, zdata->fifo_batch, 0);
 SHOW_FUNCTION(zen_front_merges_show, zdata->front_merges, 0);
+SHOW_FUNCTION(zen_writes_starved_show, zdata->writes_starved, 0);
 #undef SHOW_FUNCTION
 
 #define STORE_FUNCTION(__FUNC, __PTR, MIN, MAX, __CONV) \
@@ -496,6 +596,7 @@ STORE_FUNCTION(zen_sync_expire_store, &zdata->fifo_expire[SYNC], 0, INT_MAX, 1);
 STORE_FUNCTION(zen_async_expire_store, &zdata->fifo_expire[ASYNC], 0, INT_MAX, 1);
 STORE_FUNCTION(zen_fifo_batch_store, &zdata->fifo_batch, 0, INT_MAX, 0);
 STORE_FUNCTION(zen_front_merges_store, &zdata->front_merges, 0, 1, 0);
+STORE_FUNCTION(zen_writes_starved_store, &zdata->writes_starved, INT_MIN, INT_MAX, 0);
 #undef STORE_FUNCTION
 
 #define DD_ATTR(name) \
@@ -506,6 +607,7 @@ static struct elv_fs_entry zen_attrs[] = {
 	DD_ATTR(async_expire),
 	DD_ATTR(fifo_batch),
 	DD_ATTR(front_merges),
+	DD_ATTR(writes_starved),
 	__ATTR_NULL
 };
 
@@ -548,4 +650,4 @@ module_exit(zen_exit);
 MODULE_AUTHOR("Brandon Berhent, blk-mq port & eMMC additions");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Zen IO scheduler - blk-mq port with eMMC additions");
-MODULE_VERSION("2.0-mq");
+MODULE_VERSION("2.1-mq");
