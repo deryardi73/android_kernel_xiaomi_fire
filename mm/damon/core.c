@@ -11,6 +11,7 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/mm.h>
+#include <linux/sched/task.h>
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -973,7 +974,7 @@ static void kdamond_usleep(unsigned long usecs)
 	if (usecs > 20 * USEC_PER_MSEC)
 		schedule_timeout_idle(usecs_to_jiffies(usecs));
 	else
-		usleep_idle_range(usecs, usecs + 1);
+		usleep_range(usecs, usecs + 1);
 }
 
 /* Returns negative error code if it's not activated but should return */
@@ -1075,4 +1076,6 @@ static int kdamond_fn(void *data)
 	return 0;
 }
 
+#ifdef CONFIG_DAMON_KUNIT_TEST
 #include "core-test.h"
+#endif
