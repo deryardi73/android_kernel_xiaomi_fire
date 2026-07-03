@@ -6917,6 +6917,81 @@ int node_reclaim(struct pglist_data *pgdat, gfp_t gfp_mask, unsigned int order)
 #endif
 
 /*
+ * INSERTION POINT: mm/vmscan.c, right after the "#endif" that closes
+ * __node_reclaim()/node_reclaim() (CONFIG_NUMA block), and before the
+ * "page_evictable - test whether a page is evictable" comment.
+ *
+ * This is a pure insertion -- no existing line in vmscan.c is touched.
+ * Verified against the uploaded vmscan.c:
+ *   - shrink_page_list() signature matches (page_list, pgdat, sc,
+ *     ttu_flags, stat, force_reclaim)
+ *   - isolate_lru_page() already present and generation-agnostic
+ *   - struct scan_control's CONFIG_LRU_GEN bitfields are optional and
+ *     zero-initialize by omission, so they don't need to be set here
+ *   - memalloc_noreclaim_save()/restore() already used elsewhere in
+ *     this file
+ *
+ * Ported from mainline mm/vmscan.c reclaim_pages() (v5.16 baseline).
+ * The upstream version also sets `.no_demotion = 1` in scan_control;
+ * that field doesn't exist in this tree (NUMA demotion isn't a thing
+ * here) so it's simply omitted -- no equivalent behavior needed.
+ */
+unsigned long reclaim_pages(struct list_head *page_list)
+{
+	int nid = NUMA_NO_NODE;
+	unsigned int nr_reclaimed = 0;
+	LIST_HEAD(node_page_list);
+	struct reclaim_stat dummy_stat;
+	struct page *page;
+	unsigned int noreclaim_flag;
+	struct scan_control sc = {
+		.gfp_mask = GFP_KERNEL,
+		.may_writepage = 1,
+		.may_unmap = 1,
+		.may_swap = 1,
+	};
+
+	noreclaim_flag = memalloc_noreclaim_save();
+
+	while (!list_empty(page_list)) {
+		page = lru_to_page(page_list);
+		if (nid == NUMA_NO_NODE) {
+			nid = page_to_nid(page);
+			INIT_LIST_HEAD(&node_page_list);
+		}
+
+		if (nid == page_to_nid(page)) {
+			ClearPageActive(page);
+			list_move(&page->lru, &node_page_list);
+			continue;
+		}
+
+		nr_reclaimed += shrink_page_list(&node_page_list,
+				NODE_DATA(nid), &sc, 0, &dummy_stat, false);
+		while (!list_empty(&node_page_list)) {
+			page = lru_to_page(&node_page_list);
+			list_del(&page->lru);
+			putback_lru_page(page);
+		}
+		nid = NUMA_NO_NODE;
+	}
+
+	if (!list_empty(&node_page_list)) {
+		nr_reclaimed += shrink_page_list(&node_page_list,
+				NODE_DATA(nid), &sc, 0, &dummy_stat, false);
+		while (!list_empty(&node_page_list)) {
+			page = lru_to_page(&node_page_list);
+			list_del(&page->lru);
+			putback_lru_page(page);
+		}
+	}
+
+	memalloc_noreclaim_restore(noreclaim_flag);
+
+	return nr_reclaimed;
+}
+
+/*
  * page_evictable - test whether a page is evictable
  * @page: the page to test
  *

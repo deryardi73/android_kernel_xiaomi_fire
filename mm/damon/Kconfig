@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Trimmed for the fire 4.19 tree: only the pieces DAMON_RECLAIM needs
+# (core + physical-address primitives + the reclaim module itself).
+# DAMON_VADDR / DAMON_DBGFS / *_KUNIT_TEST intentionally left out --
+# add them later from the same v5.16 upstream snapshot if per-process
+# monitoring via debugfs is ever wanted.
+
+menu "Data Access Monitoring"
+
+config DAMON
+	bool "DAMON: Data Access Monitoring Framework"
+	help
+	  This builds a framework that allows kernel subsystems to monitor
+	  access frequency of each memory region. The information can be useful
+	  for performance-centric DRAM level memory management.
+
+	  See https://damonitor.github.io/doc/html/latest-damon/index.html for
+	  more information.
+
+config DAMON_PADDR
+	bool "Data access monitoring primitives for the physical address space"
+	depends on DAMON && MMU
+	select IDLE_PAGE_TRACKING
+	help
+	  This builds the default data access monitoring primitives for DAMON
+	  that works for the physical address space.
+
+	  NOTE: this tree's idle-page-tracking Kconfig symbol is named
+	  IDLE_PAGE_TRACKING (upstream renamed it to PAGE_IDLE_FLAG in a
+	  later release) -- verified against include/linux/page_idle.h in
+	  this tree before writing this file.
+
+config DAMON_RECLAIM
+	bool "Build DAMON-based reclaim (DAMON_RECLAIM)"
+	depends on DAMON_PADDR
+	help
+	  This builds the DAMON-based reclamation subsystem. It finds pages
+	  that not accessed for a long time (cold) using DAMON and reclaim
+	  those.
+
+	  This is suggested to be used as a proactive and lightweight
+	  reclamation under light memory pressure, while the traditional page
+	  scanning-based reclamation is used for heavy pressure.
+
+endmenu
