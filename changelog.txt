@@ -1,0 +1,8 @@
+04-07-2026
+  -Update CIP to cip 134 st18
+  -Backported MGLRU, DAMON, TEO cpuidle gov
+  -ADD BORE sched, UKSM, MQ version of the Zen io scheduler with adaptive batching based from kyber iosched
+  -Enable PSI, F2FS Compression, PERFMGR TOUCH BOOST and Game Boost Engine
+  -Change PSTORE Compression from "deflate" to "lz4", f2fs optimization, change thermal gov to step wise
+  -Disable powersave and userspace cpufreq governor because rarely used; Disable mq-deadline, kyber, and noop (mq-zen and ssg remain)
+  
