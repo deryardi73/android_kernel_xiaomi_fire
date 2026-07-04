@@ -259,6 +259,11 @@ static int __init ppm_dlpt_policy_init(void)
 
 	ppm_info("@%s: register %s done!\n", __func__, dlpt_policy.name);
 
+	/* force disabled by default: keep policy registered/intact but
+	 * prevent DLPT real-time power-budget throttling from being applied
+	 */
+	dlpt_policy.is_enabled = false;
+
 out:
 	FUNC_EXIT(FUNC_LV_POLICY);
 
@@ -276,4 +281,3 @@ static void __exit ppm_dlpt_policy_exit(void)
 
 module_init(ppm_dlpt_policy_init);
 module_exit(ppm_dlpt_policy_exit);
-
