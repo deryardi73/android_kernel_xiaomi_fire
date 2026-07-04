@@ -36,7 +36,7 @@ module_param(enabled, bool, 0600);
  * If a memory region is not accessed for this or longer time, DAMON_RECLAIM
  * identifies the region as cold, and reclaims.  120 seconds by default.
  */
-static unsigned long min_age __read_mostly = 5000000;
+static unsigned long min_age __read_mostly = 15000000;
 module_param(min_age, ulong, 0600);
 
 /*
@@ -49,7 +49,7 @@ module_param(min_age, ulong, 0600);
  *
  * 10 ms by default.
  */
-static unsigned long quota_ms __read_mostly = 15;
+static unsigned long quota_ms __read_mostly = 5;
 module_param(quota_ms, ulong, 0600);
 
 /*
@@ -62,7 +62,7 @@ module_param(quota_ms, ulong, 0600);
  *
  * 128 MiB by default.
  */
-static unsigned long quota_sz __read_mostly = 128 * 1024 * 1024;
+static unsigned long quota_sz __read_mostly = 32 * 1024 * 1024;
 module_param(quota_sz, ulong, 0600);
 
 /*
@@ -124,7 +124,7 @@ module_param(wmarks_low, ulong, 0600);
  * The sampling interval of DAMON for the cold memory monitoring.  Please refer
  * to the DAMON documentation for more detail.  5 ms by default.
  */
-static unsigned long sample_interval __read_mostly = 5000;
+static unsigned long sample_interval __read_mostly = 10000;
 module_param(sample_interval, ulong, 0600);
 
 /*
