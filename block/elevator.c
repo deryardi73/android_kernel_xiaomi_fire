@@ -966,9 +966,9 @@ out:
 }
 
 /*
- * For blk-mq devices, we default to using mq-deadline, if available, for single
- * queue devices.  If deadline isn't available OR we have multiple queues,
- * default to "none".
+ * For blk-mq devices, we default to using CONFIG_DEFAULT_IOSCHED, if
+ * available, for single queue devices.  If it isn't available OR we have
+ * multiple queues, default to "none".
  */
 int elevator_init_mq(struct request_queue *q)
 {
@@ -984,8 +984,11 @@ int elevator_init_mq(struct request_queue *q)
 		goto out;
 
 	e = elevator_get(q, CONFIG_DEFAULT_IOSCHED, false);
-	if (!e)
+	if (!e) {
+		printk(KERN_ERR "elevator_init_mq: default \"%s\" not found\n",
+				CONFIG_DEFAULT_IOSCHED);
 		goto out;
+	}
 
 	err = blk_mq_init_sched(q, e);
 	if (err)
