@@ -568,7 +568,11 @@ static int __init ppm_sysboost_policy_init(void)
 	ppm_info("@%s: register %s done!\n", __func__, sysboost_policy.name);
 
 out:
-	sysboost_policy.is_enabled = true;
+	/* force disabled by default: block XM_THERMAL/PERFSERV throttle
+	 * injection via sys_boost channel while still keeping the policy
+	 * registered (so the /proc interface and existing logic are intact)
+	 */
+	sysboost_policy.is_enabled = false;
 	FUNC_EXIT(FUNC_LV_POLICY);
 
 	return ret;
@@ -587,4 +591,3 @@ static void __exit ppm_sysboost_policy_exit(void)
 
 module_init(ppm_sysboost_policy_init);
 module_exit(ppm_sysboost_policy_exit);
-
