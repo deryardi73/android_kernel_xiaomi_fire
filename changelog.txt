@@ -5,4 +5,4 @@
   -Enable PSI, F2FS Compression, PERFMGR TOUCH BOOST and Game Boost Engine
   -Change PSTORE Compression from "deflate" to "lz4", f2fs optimization, change thermal gov to step wise
   -Disable powersave and userspace cpufreq governor because rarely used; Disable mq-deadline, kyber, and noop (mq-zen and ssg remain)
-  
+  -fix backlight not turning on after sleep  
