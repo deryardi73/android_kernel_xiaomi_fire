@@ -1193,4 +1193,3 @@ module_exit(ppm_main_exit);
 
 MODULE_DESCRIPTION("MediaTek PPM Driver v0.1");
 MODULE_LICENSE("GPL");
-

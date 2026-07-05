@@ -34,7 +34,7 @@ void mt_ppm_ptpod_policy_activate(void)
 	ppm_lock(&ptpod_policy.lock);
 
 	if (!ptpod_policy.is_enabled) {
-		ppm_dbg(MAIN, "@%s: ptpod policy is not enabled!\n", __func__);
+		ppm_warn("@%s: ptpod policy is not enabled!\n", __func__);
 		ppm_unlock(&ptpod_policy.lock);
 		goto end;
 	}
@@ -167,8 +167,6 @@ static int __init ppm_ptpod_policy_init(void)
 
 	ppm_info("@%s: register %s done!\n", __func__, ptpod_policy.name);
 
-	ptpod_policy.is_enabled = false;
-
 out:
 	FUNC_EXIT(FUNC_LV_POLICY);
 
@@ -186,3 +184,4 @@ static void __exit ppm_ptpod_policy_exit(void)
 
 module_init(ppm_ptpod_policy_init);
 module_exit(ppm_ptpod_policy_exit);
+

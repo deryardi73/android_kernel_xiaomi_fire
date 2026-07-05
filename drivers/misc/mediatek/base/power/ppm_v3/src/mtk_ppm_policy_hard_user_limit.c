@@ -118,7 +118,7 @@ unsigned int mt_ppm_hard_userlimit_cpu_freq(
 
 	ppm_lock(&hard_userlimit_policy.lock);
 	if (!hard_userlimit_policy.is_enabled) {
-		ppm_dbg(HARD_USER_LIMIT, "hard userlimit policy is not enabled!\n");
+		ppm_warn("hard userlimit policy is not enabled!\n");
 		ppm_unlock(&hard_userlimit_policy.lock);
 		return -1;
 	}
@@ -214,7 +214,7 @@ static ssize_t ppm_hard_userlimit_min_cpu_freq_proc_write(struct file *file,
 		ppm_lock(&hard_userlimit_policy.lock);
 
 		if (!hard_userlimit_policy.is_enabled) {
-			ppm_dbg(HARD_USER_LIMIT, "hard userlimit policy is not enabled!\n");
+			ppm_warn("hard userlimit policy is not enabled!\n");
 			ppm_unlock(&hard_userlimit_policy.lock);
 			goto out;
 		}
@@ -293,7 +293,7 @@ static ssize_t ppm_hard_userlimit_max_cpu_freq_proc_write(
 		ppm_lock(&hard_userlimit_policy.lock);
 
 		if (!hard_userlimit_policy.is_enabled) {
-			ppm_dbg(HARD_USER_LIMIT, "hard userlimit policy is not enabled!\n");
+			ppm_warn("hard userlimit policy is not enabled!\n");
 			ppm_unlock(&hard_userlimit_policy.lock);
 			goto out;
 		}
