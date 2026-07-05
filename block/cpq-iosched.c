@@ -525,7 +525,7 @@ static void cpq_limit_depth(unsigned int op, struct blk_mq_alloc_data *data)
 /*
  * Prepare request
  */
-static void cpq_prepare_request(struct request *rq)
+static void cpq_prepare_request(struct request *rq, struct bio *bio)
 {
 	struct cpq_rq *crq;
 
