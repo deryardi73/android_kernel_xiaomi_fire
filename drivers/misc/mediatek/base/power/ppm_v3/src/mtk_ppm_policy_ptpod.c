@@ -167,6 +167,8 @@ static int __init ppm_ptpod_policy_init(void)
 
 	ppm_info("@%s: register %s done!\n", __func__, ptpod_policy.name);
 
+	ptpod_policy.is_enabled = false;
+
 out:
 	FUNC_EXIT(FUNC_LV_POLICY);
 
