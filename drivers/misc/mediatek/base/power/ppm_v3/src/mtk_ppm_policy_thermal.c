@@ -40,7 +40,7 @@ void mt_ppm_cpu_thermal_protect(unsigned int limited_power)
 	ppm_lock(&thermal_policy.lock);
 
 	if (!thermal_policy.is_enabled) {
-		ppm_warn("@%s: thermal policy is not enabled!\n", __func__);
+		ppm_dbg(MAIN, "@%s: thermal policy is not enabled!\n", __func__);
 		ppm_unlock(&thermal_policy.lock);
 		goto end;
 	}
@@ -242,4 +242,3 @@ static void __exit ppm_thermal_policy_exit(void)
 
 module_init(ppm_thermal_policy_init);
 module_exit(ppm_thermal_policy_exit);
-

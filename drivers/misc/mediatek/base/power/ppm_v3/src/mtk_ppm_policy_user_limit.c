@@ -115,7 +115,7 @@ unsigned int mt_ppm_userlimit_cpu_freq(
 
 	ppm_lock(&userlimit_policy.lock);
 	if (!userlimit_policy.is_enabled) {
-		ppm_warn("userlimit policy is not enabled!\n");
+		ppm_dbg(USER_LIMIT, "userlimit policy is not enabled!\n");
 		ppm_unlock(&userlimit_policy.lock);
 		return -1;
 	}
@@ -188,7 +188,7 @@ static int mt_ppm_userlimit_set_min_freq(struct ppm_user_limit *limit, int min_f
 	ppm_lock(&userlimit_policy.lock);
 
 	if (!userlimit_policy.is_enabled) {
-		ppm_warn("userlimit policy is not enabled!\n");
+		ppm_dbg(USER_LIMIT, "userlimit policy is not enabled!\n");
 		ppm_unlock(&userlimit_policy.lock);
 		return -EINVAL;
 	}
@@ -244,7 +244,7 @@ static int mt_ppm_userlimit_set_max_freq(struct ppm_user_limit *limit, int max_f
 	ppm_lock(&userlimit_policy.lock);
 
 	if (!userlimit_policy.is_enabled) {
-		ppm_warn("userlimit policy is not enabled!\n");
+		ppm_dbg(USER_LIMIT, "userlimit policy is not enabled!\n");
 		ppm_unlock(&userlimit_policy.lock);
 		return -EINVAL;
 	}
@@ -609,4 +609,3 @@ static void __exit ppm_userlimit_policy_exit(void)
 
 module_init(ppm_userlimit_policy_init);
 module_exit(ppm_userlimit_policy_exit);
-

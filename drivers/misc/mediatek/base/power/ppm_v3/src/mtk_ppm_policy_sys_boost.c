@@ -166,7 +166,7 @@ void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 	ppm_lock(&sysboost_policy.lock);
 
 	if (!sysboost_policy.is_enabled) {
-		ppm_err("@%s: sysboost policy is not enabled!\n", __func__);
+		ppm_dbg(SYS_BOOST, "@%s: sysboost policy is not enabled!\n", __func__);
 		ppm_unlock(&sysboost_policy.lock);
 		return;
 	}
@@ -246,7 +246,7 @@ void mt_ppm_sysboost_set_freq_limit(enum ppm_sysboost_user user,
 	ppm_lock(&sysboost_policy.lock);
 
 	if (!sysboost_policy.is_enabled) {
-		ppm_err("@%s: sysboost policy is not enabled!\n", __func__);
+		ppm_dbg(SYS_BOOST, "@%s: sysboost policy is not enabled!\n", __func__);
 		ppm_unlock(&sysboost_policy.lock);
 		return;
 	}

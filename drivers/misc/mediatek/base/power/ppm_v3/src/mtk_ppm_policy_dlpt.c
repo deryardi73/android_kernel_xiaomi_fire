@@ -97,7 +97,12 @@ void mt_ppm_dlpt_set_limit_by_pbm(unsigned int limited_power)
 	ppm_lock(&dlpt_policy.lock);
 
 	if (!dlpt_policy.is_enabled) {
-		ppm_warn("@%s: dlpt policy is not enabled!\n", __func__);
+		/* dlpt policy is force-disabled by design (see
+		 * ppm_dlpt_policy_init()), so this path is expected on every
+		 * PBM notification. Downgrade to a debug-level message so it
+		 * no longer floods dmesg on every call.
+		 */
+		ppm_dbg(DLPT, "@%s: dlpt policy is not enabled!\n", __func__);
 		ppm_unlock(&dlpt_policy.lock);
 		goto end;
 	}
