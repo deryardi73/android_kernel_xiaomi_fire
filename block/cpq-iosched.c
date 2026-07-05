@@ -7,6 +7,20 @@
  * Based on analysis of cpq.ko and cpq_refined.c
  *
  * Copyright (C) 2025 Rasenkai <rasenkai99@gmail.com>
+ *
+ * Backported to the 4.19 blk-mq-sched ABI (inferno mglru-proto branch):
+ *  - elevator_type now uses the ops.mq/uses_mq union instead of a flat
+ *    .ops initializer (elevator_mq_ops was split from elevator_ops pre-5.x).
+ *  - depth_updated() is not part of elevator_mq_ops on 4.19; the shallow
+ *    depth is only (re)computed from init_hctx(), same as mq-deadline/kyber
+ *    of that era.
+ *  - limit_depth() takes a plain "unsigned int op", blk_opf_t doesn't exist yet.
+ *  - QUEUE_FLAG_SQ_SCHED doesn't exist yet, dropped (advisory-only flag).
+ *  - sysfs_emit() doesn't exist yet, replaced with scnprintf(page, PAGE_SIZE, ...).
+ *  - blk_discard_mergable() doesn't exist yet, replaced with req_op() check.
+ * Everything else (req_get_ioprio/bio->bi_ioprio, bio_end_sector(),
+ * sbitmap_queue_min_shallow_depth(), elv_bio_merge_ok(), elv_rqhash_*(),
+ * elv_rb_*()) already matches the 4.19 block layer verbatim.
  */
 
 #include <linux/kernel.h>
@@ -32,7 +46,7 @@
 #include "blk-mq-debugfs.h"
 #include "blk-mq-tag.h"
 #include "blk-mq-sched.h"
-#include <linux/elevator.h>
+#include "elevator.h"
 
 /*
  * Priority levels
@@ -443,8 +457,6 @@ static int cpq_init_sched(struct request_queue *q, struct elevator_type *e)
 	eq->elevator_data = cd;
 	q->elevator = eq;
 
-	blk_queue_flag_set(QUEUE_FLAG_SQ_SCHED, q);
-
 	return 0;
 }
 
@@ -491,21 +503,20 @@ static int cpq_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
 }
 
 /*
- * Depth updated
+ * NOTE: 4.19's struct elevator_mq_ops has no depth_updated() hook (added
+ * upstream later, to react to nr_requests changes via sysfs). On this
+ * kernel the shallow/async depth is only computed once, in init_hctx(),
+ * matching what mq-deadline/kyber do in this tree.
  */
-static void cpq_depth_updated(struct blk_mq_hw_ctx *hctx)
-{
-	cpq_init_hctx(hctx, hctx->queue_num);
-}
 
 /*
  * Limit depth
  */
-static void cpq_limit_depth(blk_opf_t opf, struct blk_mq_alloc_data *data)
+static void cpq_limit_depth(unsigned int op, struct blk_mq_alloc_data *data)
 {
 	struct cpq_data *cd = data->q->elevator->elevator_data;
 
-	if (op_is_sync(opf))
+	if (op_is_sync(op))
 		return;
 
 	data->shallow_depth = cd->async_depth;
@@ -705,7 +716,7 @@ static int cpq_request_merge(struct request_queue *q, struct request **req,
 			BUG_ON(sector != blk_rq_pos(__rq));
 			if (elv_bio_merge_ok(__rq, bio)) {
 				*req = __rq;
-				if (blk_discard_mergable(__rq))
+				if (req_op(__rq) == REQ_OP_DISCARD)
 					return ELEVATOR_DISCARD_MERGE;
 				return ELEVATOR_FRONT_MERGE;
 			}
@@ -768,7 +779,7 @@ static ssize_t __FUNC(struct elevator_queue *e, char *page)           \
 	int __data = __VAR;                                            \
 	if (__CONV)                                                    \
 		__data = jiffies_to_msecs(__data);                     \
-	return sysfs_emit(page, "%d\n", __data);                     \
+	return scnprintf(page, PAGE_SIZE, "%d\n", __data);             \
 }
 
 #define STORE_FUNCTION(__FUNC, __PTR, MIN, MAX, __CONV)                \
@@ -810,7 +821,7 @@ STORE_FUNCTION(cpq_prio_aging_expire_store, &cd->prio_aging_expire, 0, INT_MAX, 
 static ssize_t cpq_fore_timeout_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%d\n",
+	return scnprintf(page, PAGE_SIZE, "%d\n",
 	                  jiffies_to_msecs(cd->groups[CPQ_GROUP_FG].timeout));
 }
 
@@ -832,7 +843,7 @@ static ssize_t cpq_fore_timeout_store(struct elevator_queue *e,
 static ssize_t cpq_back_timeout_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%d\n",
+	return scnprintf(page, PAGE_SIZE, "%d\n",
 	                  jiffies_to_msecs(cd->groups[CPQ_GROUP_BG].timeout));
 }
 
@@ -854,7 +865,7 @@ static ssize_t cpq_back_timeout_store(struct elevator_queue *e,
 static ssize_t cpq_slice_idle_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%llu\n", cd->slice_idle / 1000);
+	return scnprintf(page, PAGE_SIZE, "%llu\n", cd->slice_idle / 1000);
 }
 
 static ssize_t cpq_slice_idle_store(struct elevator_queue *e,
@@ -875,7 +886,7 @@ static ssize_t cpq_slice_idle_store(struct elevator_queue *e,
 static ssize_t cpq_io_threshold_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%llu\n", cd->io_threshold);
+	return scnprintf(page, PAGE_SIZE, "%llu\n", cd->io_threshold);
 }
 
 static ssize_t cpq_io_threshold_store(struct elevator_queue *e,
@@ -896,7 +907,7 @@ static ssize_t cpq_io_threshold_store(struct elevator_queue *e,
 static ssize_t cpq_cpq_log_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%u\n", cd->cpq_log);
+	return scnprintf(page, PAGE_SIZE, "%u\n", cd->cpq_log);
 }
 
 static ssize_t cpq_cpq_log_store(struct elevator_queue *e,
@@ -939,15 +950,12 @@ static struct elv_fs_entry cpq_attrs[] = {
  * Elevator type
  */
 static struct elevator_type cpq_mq = {
-	.ops = {
-		.depth_updated = cpq_depth_updated,
+	.ops.mq = {
 		.limit_depth = cpq_limit_depth,
 		.insert_requests = cpq_insert_requests,
 		.dispatch_request = cpq_dispatch_request,
 		.prepare_request = cpq_prepare_request,
 		.finish_request = cpq_finish_request,
-		.next_request = elv_rb_latter_request,
-		.former_request = elv_rb_former_request,
 		.next_request = cpq_rb_latter_request,
 		.former_request = cpq_rb_former_request,
 		.request_merge = cpq_request_merge,
@@ -958,6 +966,7 @@ static struct elevator_type cpq_mq = {
 		.exit_sched = cpq_exit_sched,
 		.init_hctx = cpq_init_hctx,
 	},
+	.uses_mq = true,
 	.elevator_attrs = cpq_attrs,
 	.elevator_name = "cpq",
 	.elevator_owner = THIS_MODULE,

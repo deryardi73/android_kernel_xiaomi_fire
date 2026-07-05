@@ -57,6 +57,9 @@ choice
 	config DEFAULT_MQ_ZEN
 		bool "MQ-Zen" if MQ_IOSCHED_ZEN=y
 
+	config DEFAULT_MQ_CPQ
+		bool "CPQ" if MQ_IOSCHED_CPQ=y
+
 	config DEFAULT_DEADLINE
 		bool "Deadline" if IOSCHED_DEADLINE=y
 
@@ -73,6 +76,7 @@ config DEFAULT_IOSCHED
 	default "ssg" if DEFAULT_MQ_IOSCHED_SSG
 	default "mq-deadline" if DEFAULT_MQ_DEADLINE
 	default "mq-zen" if DEFAULT_MQ_ZEN
+	default "cpq" if DEFAULT_MQ_CPQ
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
 	default "noop" if DEFAULT_NOOP
@@ -111,6 +115,17 @@ config MQ_IOSCHED_ZEN
 	default y
 	---help---
 	  MQ version of the zen IO scheduler.
+
+config MQ_IOSCHED_CPQ
+	tristate "CPQ I/O scheduler"
+	default y
+	---help---
+	  CPQ (Custom Priority Queue) is a blk-mq I/O scheduler that splits
+	  requests into foreground/background groups and RT/BE/IDLE ioprio
+	  priority levels, with per-level deadline and priority-aging FIFO
+	  dispatch on top of an rbtree sort list, similar in spirit to
+	  mq-deadline but with a foreground/background split intended for
+	  interactive (mobile) workloads.
 
 config IOSCHED_BFQ
 	tristate "BFQ I/O scheduler"
