@@ -411,7 +411,7 @@ static struct dbs_governor od_dbs_gov = {
 	.start = od_start,
 };
 
-#define CPU_FREQ_GOV_inferno	(&od_dbs_gov.gov)
+#define CPU_FREQ_GOV_INFERNO	(&od_dbs_gov.gov)
 
 static void od_set_powersave_bias(unsigned int powersave_bias)
 {
@@ -432,7 +432,7 @@ static void od_set_powersave_bias(unsigned int powersave_bias)
 			continue;
 
 		policy = cpufreq_cpu_get_raw(cpu);
-		if (!policy || policy->governor != CPU_FREQ_GOV_inferno)
+		if (!policy || policy->governor != CPU_FREQ_GOV_INFERNO)
 			continue;
 
 		policy_dbs = policy->governor_data;
@@ -466,18 +466,18 @@ EXPORT_SYMBOL_GPL(od_unregister_powersave_bias_handler);
 
 static int __init cpufreq_gov_dbs_init(void)
 {
-	return cpufreq_register_governor(CPU_FREQ_GOV_inferno);
+	return cpufreq_register_governor(CPU_FREQ_GOV_INFERNO);
 }
 
 static void __exit cpufreq_gov_dbs_exit(void)
 {
-	cpufreq_unregister_governor(CPU_FREQ_GOV_inferno);
+	cpufreq_unregister_governor(CPU_FREQ_GOV_INFERNO);
 }
 
-#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_inferno
+#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_INFERNO
 struct cpufreq_governor *cpufreq_default_governor(void)
 {
-	return CPU_FREQ_GOV_inferno;
+	return CPU_FREQ_GOV_INFERNO;
 }
 
 fs_initcall(cpufreq_gov_dbs_init);
