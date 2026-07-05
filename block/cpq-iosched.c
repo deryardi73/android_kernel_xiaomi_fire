@@ -38,6 +38,7 @@
 #include <linux/ktime.h>
 #include <linux/ioprio.h>
 #include <linux/hashtable.h>
+#include <linux/elevator.h>
 
 #include <trace/events/block.h>
 
@@ -46,7 +47,6 @@
 #include "blk-mq-debugfs.h"
 #include "blk-mq-tag.h"
 #include "blk-mq-sched.h"
-#include "elevator.h"
 
 /*
  * Priority levels
