@@ -260,6 +260,7 @@ static int __init ppm_dlpt_policy_init(void)
 	ppm_info("@%s: register %s done!\n", __func__, dlpt_policy.name);
 
 out:
+	dlpt_policy.is_enabled = false;
 	FUNC_EXIT(FUNC_LV_POLICY);
 
 	return ret;

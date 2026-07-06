@@ -16,13 +16,8 @@
 #include "sched.h"
 
 #include <linux/sched/cpufreq.h>
-#include <linux/input.h>
 #include <trace/events/power.h>
 #include "cpufreq_schedutil.h"
-
-/* Input-boost defaults: borrowed concept from interactive/intelliactive gov */
-#define DEFAULT_INPUT_BOOST_DURATION_MS	100
-#define DEFAULT_INPUT_BOOST_FREQ_PCT		60
 
 void (*cpufreq_notifier_fp)(int cluster_id, unsigned long freq);
 EXPORT_SYMBOL(cpufreq_notifier_fp);
@@ -31,11 +26,6 @@ struct sugov_tunables {
 	struct gov_attr_set	attr_set;
 	unsigned int		up_rate_limit_us;
 	unsigned int		down_rate_limit_us;
-
-	/* Input-boost tunables (touch/key event -> temporary freq floor) */
-	unsigned int		input_boost_freq_pct;
-	unsigned int		input_boost_duration_ms;
-	bool			input_boost_enabled;
 };
 
 struct sugov_policy {
@@ -63,11 +53,6 @@ struct sugov_policy {
 
 	bool			limits_changed;
 	bool			need_freq_update;
-
-	/* Linkage into sugov_policy_list, used by the input-boost handler
-	 * to reach every active policy/cluster's tunables.
-	 */
-	struct list_head	input_boost_node;
 };
 
 struct sugov_cpu {
@@ -90,28 +75,6 @@ struct sugov_cpu {
 };
 
 static DEFINE_PER_CPU(struct sugov_cpu, sugov_cpu);
-
-/*
- * Global input-boost deadline (ns, CLOCK_MONOTONIC via ktime_get_ns()).
- * Shared across all sugov policies/clusters: a touch/key event boosts
- * every cluster's floor freq at once, same wallclock window. Each policy
- * still applies its own pct via its own tunables, so big/little clusters
- * can be tuned independently even though the timer is shared.
- */
-static atomic64_t sugov_input_boost_end_ns = ATOMIC64_INIT(0);
-
-/*
- * Tracks every currently-started sugov_policy (one per cluster) so the
- * input event handler below can find each policy's tunables and figure
- * out how long to extend the shared boost window for.
- */
-static LIST_HEAD(sugov_policy_list);
-static DEFINE_SPINLOCK(sugov_policy_list_lock);
-
-/* Only register the input handler once, no matter how many clusters
- * (cpufreq policies) schedutil is managing.
- */
-static atomic_t sugov_input_handler_refcnt = ATOMIC_INIT(0);
 
 /************************ Governor internals ***********************/
 
@@ -293,137 +256,6 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 #endif
 }
 #endif
-
-/*
- * sugov_input_boost_freq - compute the floor frequency demanded by an
- * in-flight input-boost window, or 0 if no boost is currently active.
- *
- * Kept separate from get_next_freq()/PELT util: it's a pure floor clamp
- * applied by the caller, so it works the same whether
- * CONFIG_NONLINEAR_FREQ_CTL's get_next_freq() or the stock one above is
- * in use.
- */
-static unsigned int sugov_input_boost_freq(struct sugov_policy *sg_policy, u64 time)
-{
-	struct sugov_tunables *tunables = sg_policy->tunables;
-	u64 end_ns;
-
-	if (!tunables || !tunables->input_boost_enabled)
-		return 0;
-
-	end_ns = atomic64_read(&sugov_input_boost_end_ns);
-	if (!end_ns || time >= end_ns)
-		return 0;
-
-	return (sg_policy->policy->max *
-		tunables->input_boost_freq_pct) / 100;
-}
-
-/*
- * sugov_input_boost_pulse - extend the shared input-boost deadline.
- *
- * Called on every touch/key event. Walks all active policies/clusters and
- * uses the longest input_boost_duration_ms among those with
- * input_boost_enabled set, so no cluster's boost window gets cut short.
- * Policies with the boost disabled are ignored, and if none have it
- * enabled the deadline is left untouched (i.e. no boost happens).
- */
-static void sugov_input_boost_pulse(void)
-{
-	struct sugov_policy *sg_policy;
-	unsigned int duration_ms = 0;
-	unsigned long flags;
-	u64 now_ns;
-
-	spin_lock_irqsave(&sugov_policy_list_lock, flags);
-	list_for_each_entry(sg_policy, &sugov_policy_list, input_boost_node) {
-		struct sugov_tunables *tunables = sg_policy->tunables;
-
-		if (tunables && tunables->input_boost_enabled &&
-		    tunables->input_boost_duration_ms > duration_ms)
-			duration_ms = tunables->input_boost_duration_ms;
-	}
-	spin_unlock_irqrestore(&sugov_policy_list_lock, flags);
-
-	/* Nobody has input boost enabled right now, nothing to do. */
-	if (!duration_ms)
-		return;
-
-	now_ns = ktime_get_ns();
-	atomic64_set(&sugov_input_boost_end_ns, now_ns + duration_ms * NSEC_PER_MSEC);
-}
-
-static void sugov_input_event(struct input_handle *handle, unsigned int type,
-			       unsigned int code, int value)
-{
-	sugov_input_boost_pulse();
-}
-
-static int sugov_input_connect(struct input_handler *handler,
-				struct input_dev *dev,
-				const struct input_device_id *id)
-{
-	struct input_handle *handle;
-	int err;
-
-	handle = kzalloc(sizeof(*handle), GFP_KERNEL);
-	if (!handle)
-		return -ENOMEM;
-
-	handle->dev = dev;
-	handle->handler = handler;
-	handle->name = "sugov_input_boost";
-
-	err = input_register_handle(handle);
-	if (err)
-		goto err_free;
-
-	err = input_open_device(handle);
-	if (err)
-		goto err_unregister;
-
-	return 0;
-
-err_unregister:
-	input_unregister_handle(handle);
-err_free:
-	kfree(handle);
-	return err;
-}
-
-static void sugov_input_disconnect(struct input_handle *handle)
-{
-	input_close_device(handle);
-	input_unregister_handle(handle);
-	kfree(handle);
-}
-
-/* Match touchscreens (devices reporting ABS_MT_POSITION_X) and any device
- * reporting key events (power/volume buttons, etc.) — the same event
- * classes classic Android "interactive"-style governors boost on.
- */
-static const struct input_device_id sugov_input_ids[] = {
-	{
-		.flags = INPUT_DEVICE_ID_MATCH_EVBIT |
-			 INPUT_DEVICE_ID_MATCH_ABSBIT,
-		.evbit = { BIT_MASK(EV_ABS) },
-		.absbit = { [BIT_WORD(ABS_MT_POSITION_X)] =
-				BIT_MASK(ABS_MT_POSITION_X) },
-	},
-	{
-		.flags = INPUT_DEVICE_ID_MATCH_EVBIT,
-		.evbit = { BIT_MASK(EV_KEY) },
-	},
-	{ },
-};
-
-static struct input_handler sugov_input_handler = {
-	.event		= sugov_input_event,
-	.connect	= sugov_input_connect,
-	.disconnect	= sugov_input_disconnect,
-	.name		= "sugov_input_boost",
-	.id_table	= sugov_input_ids,
-};
 
 extern long
 schedtune_cpu_margin_with(unsigned long util, int cpu, struct task_struct *p);
@@ -752,13 +584,6 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 		sg_policy->cached_raw_freq = sg_policy->prev_cached_raw_freq;
 	}
 
-	{
-		unsigned int boost_freq = sugov_input_boost_freq(sg_policy, time);
-
-		if (boost_freq > next_f)
-			next_f = boost_freq;
-	}
-
 #ifdef CONFIG_MTK_TINYSYS_SSPM_SUPPORT
 	if (sugov_update_next_freq(sg_policy, time, next_f)) {
 		mt_cpufreq_set_by_wfi_load_cluster(cid, next_f);
@@ -814,13 +639,6 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 	}
 
 	next_f = get_next_freq(sg_policy, util, max);
-
-	{
-		unsigned int boost_freq = sugov_input_boost_freq(sg_policy, time);
-
-		if (boost_freq > next_f)
-			next_f = boost_freq;
-	}
 
 #ifdef CONFIG_MTK_TINYSYS_SSPM_SUPPORT
 	cid = arch_cpu_cluster_id(policy->cpu);
@@ -978,81 +796,12 @@ static ssize_t down_rate_limit_us_store(struct gov_attr_set *attr_set,
 	return count;
 }
 
-static ssize_t input_boost_freq_pct_show(struct gov_attr_set *attr_set, char *buf)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-
-	return sprintf(buf, "%u\n", tunables->input_boost_freq_pct);
-}
-
-static ssize_t input_boost_freq_pct_store(struct gov_attr_set *attr_set,
-					  const char *buf, size_t count)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-	unsigned int val;
-
-	if (kstrtouint(buf, 10, &val))
-		return -EINVAL;
-
-	if (val > 100)
-		val = 100;
-
-	tunables->input_boost_freq_pct = val;
-	return count;
-}
-
-static ssize_t input_boost_duration_ms_show(struct gov_attr_set *attr_set, char *buf)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-
-	return sprintf(buf, "%u\n", tunables->input_boost_duration_ms);
-}
-
-static ssize_t input_boost_duration_ms_store(struct gov_attr_set *attr_set,
-					     const char *buf, size_t count)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-	unsigned int val;
-
-	if (kstrtouint(buf, 10, &val))
-		return -EINVAL;
-
-	tunables->input_boost_duration_ms = val;
-	return count;
-}
-
-static ssize_t input_boost_enabled_show(struct gov_attr_set *attr_set, char *buf)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-
-	return sprintf(buf, "%u\n", tunables->input_boost_enabled);
-}
-
-static ssize_t input_boost_enabled_store(struct gov_attr_set *attr_set,
-					 const char *buf, size_t count)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-	unsigned int val;
-
-	if (kstrtouint(buf, 10, &val))
-		return -EINVAL;
-
-	tunables->input_boost_enabled = !!val;
-	return count;
-}
-
 static struct governor_attr up_rate_limit_us = __ATTR_RW(up_rate_limit_us);
 static struct governor_attr down_rate_limit_us = __ATTR_RW(down_rate_limit_us);
-static struct governor_attr input_boost_freq_pct = __ATTR_RW(input_boost_freq_pct);
-static struct governor_attr input_boost_duration_ms = __ATTR_RW(input_boost_duration_ms);
-static struct governor_attr input_boost_enabled = __ATTR_RW(input_boost_enabled);
 
 static struct attribute *sugov_attributes[] = {
 	&up_rate_limit_us.attr,
 	&down_rate_limit_us.attr,
-	&input_boost_freq_pct.attr,
-	&input_boost_duration_ms.attr,
-	&input_boost_enabled.attr,
 	NULL
 };
 
@@ -1299,14 +1048,6 @@ static int sugov_init(struct cpufreq_policy *policy)
 	tunables->up_rate_limit_us = cpufreq_policy_transition_delay_us(policy);
 	tunables->down_rate_limit_us = cpufreq_policy_transition_delay_us(policy);
 
-	/* Enable input boost by default so it works out of the box, without
-	 * needing a userspace tool (Franco Kernel Manager, etc.) to flip it
-	 * on after every boot.
-	 */
-	tunables->input_boost_enabled = true;
-	tunables->input_boost_duration_ms = DEFAULT_INPUT_BOOST_DURATION_MS;
-	tunables->input_boost_freq_pct = DEFAULT_INPUT_BOOST_FREQ_PCT;
-
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;
 
@@ -1397,24 +1138,6 @@ static int sugov_start(struct cpufreq_policy *policy)
 							sugov_update_shared :
 							sugov_update_single);
 	}
-
-	spin_lock(&sugov_policy_list_lock);
-	list_add_tail(&sg_policy->input_boost_node, &sugov_policy_list);
-	spin_unlock(&sugov_policy_list_lock);
-
-	/* Register the shared input handler once, when the first cluster
-	 * starts. Later clusters just add themselves to the list above.
-	 */
-	if (atomic_inc_return(&sugov_input_handler_refcnt) == 1) {
-		int ret = input_register_handler(&sugov_input_handler);
-
-		if (ret) {
-			pr_warn("%s: failed to register input-boost handler: %d\n",
-				__func__, ret);
-			atomic_dec(&sugov_input_handler_refcnt);
-		}
-	}
-
 	return 0;
 }
 
@@ -1432,14 +1155,6 @@ static void sugov_stop(struct cpufreq_policy *policy)
 		irq_work_sync(&sg_policy->irq_work);
 		kthread_cancel_work_sync(&sg_policy->work);
 	}
-
-	spin_lock(&sugov_policy_list_lock);
-	list_del(&sg_policy->input_boost_node);
-	spin_unlock(&sugov_policy_list_lock);
-
-	/* Last cluster stopping: tear the shared input handler down. */
-	if (atomic_dec_return(&sugov_input_handler_refcnt) == 0)
-		input_unregister_handler(&sugov_input_handler);
 }
 
 static void sugov_limits(struct cpufreq_policy *policy)

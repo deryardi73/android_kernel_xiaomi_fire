@@ -399,12 +399,11 @@ static int __init ppm_pwrthro_policy_init(void)
 
 	ppm_info("@%s: register %s done!\n", __func__, pwrthro_policy.name);
 
+out:
 	/* force disabled by default: keep policy registered/intact but
 	 * prevent low-battery/OC/percentage throttling from being applied
 	 */
 	pwrthro_policy.is_enabled = false;
-
-out:
 	FUNC_EXIT(FUNC_LV_POLICY);
 
 	return ret;
