@@ -328,4 +328,9 @@ source "fs/nls/Kconfig"
 source "fs/dlm/Kconfig"
 source "fs/unicode/Kconfig"
 
+config IO_URING
+	bool "IO uring support" if EXPERT
+	select ANON_INODES
+	default y
+
 endmenu

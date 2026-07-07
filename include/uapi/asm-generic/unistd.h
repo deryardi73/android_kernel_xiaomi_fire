@@ -745,8 +745,15 @@ __SYSCALL(__NR_close_range, sys_close_range)
 #define __NR_epoll_pwait2 441
 __SC_COMP(__NR_epoll_pwait2, sys_epoll_pwait2, compat_sys_epoll_pwait2)
 
+#define __NR_io_uring_setup 442
+__SYSCALL(__NR_io_uring_setup, sys_io_uring_setup)
+#define __NR_io_uring_enter 443
+__SYSCALL(__NR_io_uring_enter, sys_io_uring_enter)
+#define __NR_io_uring_register 444
+__SYSCALL(__NR_io_uring_register, sys_io_uring_register)
+
 #undef __NR_syscalls
-#define __NR_syscalls 442
+#define __NR_syscalls 445
 
 /*
  * 32 bit systems traditionally used different
