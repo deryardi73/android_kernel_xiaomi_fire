@@ -168,6 +168,12 @@ static int select_gc_type(struct f2fs_sb_info *sbi, int gc_type)
 {
 	int gc_mode = (gc_type == BG_GC) ? GC_CB : GC_GREEDY;
 
+	/* prefer age-threshold GC for background cleaning once enabled,
+	 * regardless of the idle/urgent knob in sysfs. */
+	if (gc_type == BG_GC && sbi->am.atgc_enabled &&
+			sbi->gc_mode == GC_NORMAL)
+		gc_mode = GC_AT;
+
 	switch (sbi->gc_mode) {
 	case GC_IDLE_CB:
 		gc_mode = GC_CB;
@@ -175,6 +181,10 @@ static int select_gc_type(struct f2fs_sb_info *sbi, int gc_type)
 	case GC_IDLE_GREEDY:
 	case GC_URGENT:
 		gc_mode = GC_GREEDY;
+		break;
+	case GC_IDLE_AT:
+		if (sbi->am.atgc_enabled)
+			gc_mode = GC_AT;
 		break;
 	}
 	return gc_mode;
@@ -185,8 +195,8 @@ static void select_policy(struct f2fs_sb_info *sbi, int gc_type,
 {
 	struct dirty_seglist_info *dirty_i = DIRTY_I(sbi);
 
-	if (p->alloc_mode == SSR) {
-		p->gc_mode = GC_GREEDY;
+	if (p->alloc_mode == SSR || p->alloc_mode == AT_SSR) {
+		p->gc_mode = (p->alloc_mode == AT_SSR) ? GC_AT : GC_GREEDY;
 		p->dirty_segmap = dirty_i->dirty_segmap[type];
 		p->max_search = dirty_i->nr_dirty[type];
 		p->ofs_unit = 1;
@@ -196,6 +206,8 @@ static void select_policy(struct f2fs_sb_info *sbi, int gc_type,
 		p->max_search = dirty_i->nr_dirty[DIRTY];
 		p->ofs_unit = sbi->segs_per_sec;
 	}
+
+	p->age_threshold = sbi->am.age_threshold;
 
 	/*
 	 * adjust candidates range, should select all dirty segments for
@@ -223,6 +235,8 @@ static unsigned int get_max_cost(struct f2fs_sb_info *sbi,
 	if (p->gc_mode == GC_GREEDY)
 		return 2 * sbi->blocks_per_seg * p->ofs_unit;
 	else if (p->gc_mode == GC_CB)
+		return UINT_MAX;
+	else if (p->gc_mode == GC_AT)
 		return UINT_MAX;
 	else /* No other gc_mode */
 		return 0;
@@ -304,6 +318,54 @@ static unsigned char get_seg_age(struct f2fs_sb_info *sbi, unsigned int segno)
 	return age;
 }
 
+/*
+ * cost for GC_AT / AT_SSR: prefer segments whose age is *older* than
+ * am.age_threshold, weighted against valid-block count so that heavily
+ * fragmented old segments are still favoured over near-empty young ones.
+ * lower return value == more attractive victim (same convention as
+ * get_cb_cost()/get_gc_cost()).
+ */
+static unsigned int get_atgc_cost(struct f2fs_sb_info *sbi,
+			unsigned int segno, struct victim_sel_policy *p)
+{
+	struct sit_info *sit_i = SIT_I(sbi);
+	unsigned int secno = GET_SEC_FROM_SEG(sbi, segno);
+	unsigned int start = GET_SEG_FROM_SEC(sbi, secno);
+	unsigned long long mtime = 0;
+	unsigned int vblocks;
+	unsigned int u, age_ratio;
+	unsigned int i;
+	unsigned long long now;
+
+	for (i = 0; i < sbi->segs_per_sec; i++)
+		mtime += get_seg_entry(sbi, start + i)->mtime;
+	mtime = div_u64(mtime, sbi->segs_per_sec);
+
+	if (mtime < sit_i->min_mtime)
+		sit_i->min_mtime = mtime;
+	if (mtime > sit_i->max_mtime)
+		sit_i->max_mtime = mtime;
+
+	now = sit_i->max_mtime;
+	vblocks = get_valid_blocks(sbi, segno, true);
+	vblocks = div_u64(vblocks, sbi->segs_per_sec);
+	u = (vblocks * 100) >> sbi->log_blocks_per_seg;
+
+	/* segment younger than the age threshold: strongly deprioritize */
+	if (p->age_threshold && now > mtime &&
+			(now - mtime) < p->age_threshold)
+		return UINT_MAX - 1;
+
+	if (sit_i->max_mtime == sit_i->min_mtime)
+		age_ratio = 0;
+	else
+		age_ratio = 100 - div64_u64(100 * (mtime - sit_i->min_mtime),
+				sit_i->max_mtime - sit_i->min_mtime);
+
+	/* same shape as get_cb_cost(): older + more invalid == lower cost */
+	return UINT_MAX - ((100 * (100 - u) * age_ratio) / (100 + u));
+}
+
 static inline unsigned int get_gc_cost(struct f2fs_sb_info *sbi,
 			unsigned int segno, struct victim_sel_policy *p)
 {
@@ -311,10 +373,14 @@ static inline unsigned int get_gc_cost(struct f2fs_sb_info *sbi,
  
 	if (p->alloc_mode == SSR)
 		return get_seg_entry(sbi, segno)->ckpt_valid_blocks;
+	if (p->alloc_mode == AT_SSR)
+		return get_atgc_cost(sbi, segno, p);
  
 	/* alloc_mode == LFS */
 	if (p->gc_mode == GC_CB)
 		return get_cb_cost(sbi, segno);
+	if (p->gc_mode == GC_AT)
+		return get_atgc_cost(sbi, segno, p);
  
 	/* GC_GREEDY, age-weighted tiebreak */
 	vblocks = get_valid_blocks(sbi, segno, true);
@@ -1447,6 +1513,16 @@ void f2fs_build_gc_manager(struct f2fs_sb_info *sbi)
 	DIRTY_I(sbi)->v_ops = &default_v_ops;
 
 	sbi->gc_pin_file_threshold = DEF_GC_FAILED_PINNED_FILES;
+
+	/* atgc: enabled only when "atgc" mount option is set (F2FS_MOUNT_ATGC) */
+	sbi->am.atgc_enabled = !!test_opt(sbi, ATGC);
+	sbi->am.age_threshold = DEF_GC_THREAD_AGE_THRESHOLD;
+	sbi->am.age_weight = DEF_GC_THREAD_AGE_WEIGHT;
+	sbi->am.candidate_ratio = DEF_GC_THREAD_CANDIDATE_RATIO;
+	sbi->am.max_candidate_count = DEF_GC_THREAD_MAX_CANDIDATE_COUNT;
+	sbi->am.root = RB_ROOT_CACHED;
+	INIT_LIST_HEAD(&sbi->am.victim_list);
+	sbi->am.victim_count = 0;
 
 	/* give warm/cold data area from slower device */
 	if (f2fs_is_multi_device(sbi) && !__is_large_section(sbi))

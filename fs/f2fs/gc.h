@@ -22,6 +22,12 @@
 /* Search max. number of dirty segments to select a victim segment */
 #define DEF_MAX_VICTIM_SEARCH 4096 /* covers 8GB */
 
+/* for GC_AT (age threshold based garbage collection) */
+#define DEF_GC_THREAD_AGE_THRESHOLD	86400	/* 1 day, in seconds */
+#define DEF_GC_THREAD_CANDIDATE_RATIO	20	/* select 20% oldest sections as candidate */
+#define DEF_GC_THREAD_MAX_CANDIDATE_COUNT	10
+#define DEF_GC_THREAD_AGE_WEIGHT	60	/* age weight, vblock weight = 100 - this */
+
 struct f2fs_gc_kthread {
 	struct task_struct *f2fs_gc_task;
 	wait_queue_head_t gc_wait_queue_head;
