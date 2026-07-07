@@ -188,18 +188,6 @@ struct victim_entry {
 	struct list_head list;
 };
 
-/* for GC_AT */
-struct atgc_management {
-	bool atgc_enabled;			/* ATGC is enabled or not */
-	struct rb_root_cached root;		/* root of victim rb-tree */
-	struct list_head victim_list;		/* linked with all victim entries */
-	unsigned int victim_count;		/* victim count in rb-tree */
-	unsigned int candidate_ratio;		/* candidate ratio */
-	unsigned int max_candidate_count;	/* max candidate count */
-	unsigned int age_weight;	/* age weight, vblock_weight = 100 - age_weight */
-	unsigned long long age_threshold;	/* age threshold */
-};
-
 struct seg_entry {
 	unsigned int type:6;		/* segment type like CURSEG_XXX_TYPE */
 	unsigned int valid_blocks:10;	/* # of valid blocks */

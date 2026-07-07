@@ -1401,6 +1401,17 @@ struct decompress_io_ctx {
 #define MAX_COMPRESS_LOG_SIZE		8
 #define MAX_COMPRESS_WINDOW_SIZE	((PAGE_SIZE) << MAX_COMPRESS_LOG_SIZE)
 
+struct atgc_management {
+	bool atgc_enabled;
+	struct rb_root_cached root;
+	struct list_head victim_list;
+	unsigned int victim_count;
+	unsigned int candidate_ratio;
+	unsigned int max_candidate_count;
+	unsigned int age_weight;
+	unsigned long long age_threshold;
+};
+
 struct f2fs_sb_info {
 	struct super_block *sb;			/* pointer to VFS super block */
 	struct proc_dir_entry *s_proc;		/* proc entry */
