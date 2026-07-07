@@ -101,7 +101,7 @@ static ssize_t ppm_ut_fix_core_num_proc_write(struct file *file,
 	ppm_lock(&ut_policy.lock);
 
 	if (!ut_policy.is_enabled) {
-		ppm_info("@%s: UT policy is not enabled!\n", __func__);
+		ppm_dbg(MAIN, "@%s: UT policy is not enabled!\n", __func__);
 		ppm_unlock(&ut_policy.lock);
 		goto out;
 	}
@@ -210,7 +210,7 @@ static ssize_t ppm_ut_fix_freq_idx_proc_write(struct file *file,
 	ppm_lock(&ut_policy.lock);
 
 	if (!ut_policy.is_enabled) {
-		ppm_info("@%s: UT policy is not enabled!\n", __func__);
+		ppm_dbg(MAIN, "@%s: UT policy is not enabled!\n", __func__);
 		ppm_unlock(&ut_policy.lock);
 		goto out;
 	}
