@@ -16,6 +16,7 @@
 #define _ZRAM_DRV_H_
 
 #include <linux/rwsem.h>
+#include <linux/workqueue.h>
 #include <linux/zsmalloc.h>
 #include <linux/crypto.h>
 
@@ -96,7 +97,8 @@ struct zram {
 	struct zs_pool *mem_pool;
 	struct zcomp *comp;
 	struct zcomp *comp_secondary;	/* optional recompression backend */
-	struct task_struct *recomp_thread;	/* auto idle-page recompress */
+	struct work_struct comp_secondary_work;	/* async secondary init */
+	char comp_secondary_pending[CRYPTO_MAX_ALG_NAME]; /* algo queued for init */
 	struct gendisk *disk;
 	/* Prevent concurrent execution of device init */
 	struct rw_semaphore init_lock;
