@@ -36,7 +36,7 @@ static atomic_t g_i32Count = ATOMIC_INIT(0);
 static unsigned int ged_monitor_3D_fence_debug;
 static unsigned int ged_monitor_3D_fence_disable;
 static unsigned int ged_monitor_3D_fence_switch;
-static unsigned int ged_smart_boost;
+static unsigned int ged_smart_boost = 1;
 static unsigned int ged_monitor_3D_fence_systrace;
 static unsigned long g_ul3DFenceDoneTime;
 

@@ -301,8 +301,8 @@ static unsigned long long g_CRemTimeAccu; /*g_cpu_remained_time_accum*/
 static unsigned long long g_gpu_freq_accum;
 static unsigned int g_frame_count;
 
-static int gx_game_mode;
-static int gx_boost_on;
+static int gx_game_mode = 1;
+static int gx_boost_on = 1;
 #ifdef GED_KPI_CPU_BOOST
 static int gx_force_cpu_boost;
 static int gx_top_app_pid;
@@ -319,11 +319,11 @@ static unsigned int gx_gpu_freq_avg;
 #ifdef GED_KPI_CPU_BOOST
 static int boost_accum_cpu;
 /* for non-GED_KPI_MAX_FPS-FPS cases */
-static long target_t_cpu_remained = 16000000;
+static long target_t_cpu_remained = 20000000;
 /* static long target_t_cpu_remained_min = 8300000; */
 /* default 0.5 vsync period */
-static int cpu_boost_policy;
-static int boost_extra;
+static int cpu_boost_policy = 1;
+static int boost_extra = 1;
 static int boost_amp;
 static int deboost_reduce;
 static int boost_upper_bound = 100;
