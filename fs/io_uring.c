@@ -70,6 +70,7 @@
 #include <linux/nospec.h>
 #include <linux/sizes.h>
 #include <linux/hugetlb.h>
+#include <linux/iocontext.h>
 
 #include <uapi/linux/io_uring.h>
 
@@ -634,7 +635,11 @@ static int io_do_iopoll(struct io_ring_ctx *ctx, unsigned int *nr_events,
 		if (!list_empty(&done))
 			break;
 
-		ret = kiocb->ki_filp->f_op->iopoll(kiocb, spin);
+		/* this MTK 4.19 tree has no f_op->iopoll; IOPOLL mode is
+		 * rejected up-front in io_prep_rw(), so this path is dead,
+		 * but keep it building safely instead of an undefined member
+		 * access. */
+		ret = -EOPNOTSUPP;
 		if (ret < 0)
 			break;
 
@@ -733,7 +738,7 @@ static void io_complete_rw(struct kiocb *kiocb, long res, long res2)
 	io_put_req(req);
 }
 
-static void io_complete_rw_iopoll(struct kiocb *kiocb, long res, long res2)
+static void __maybe_unused io_complete_rw_iopoll(struct kiocb *kiocb, long res, long res2)
 {
 	struct io_kiocb *req = container_of(kiocb, struct io_kiocb, rw);
 
@@ -866,8 +871,12 @@ static int io_prep_rw(struct io_kiocb *req, const struct sqe_submit *s,
 			return ret;
 
 		kiocb->ki_ioprio = ioprio;
-	} else
-		kiocb->ki_ioprio = get_current_ioprio();
+	} else {
+		struct io_context *ioc = current->io_context;
+
+		kiocb->ki_ioprio = ioc ? ioc->ioprio :
+			IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_NORM);
+	}
 
 	ret = kiocb_set_rw_flags(kiocb, READ_ONCE(sqe->rw_flags));
 	if (unlikely(ret))
@@ -881,13 +890,8 @@ static int io_prep_rw(struct io_kiocb *req, const struct sqe_submit *s,
 		kiocb->ki_flags |= IOCB_NOWAIT;
 
 	if (ctx->flags & IORING_SETUP_IOPOLL) {
-		if (!(kiocb->ki_flags & IOCB_DIRECT) ||
-		    !kiocb->ki_filp->f_op->iopoll)
-			return -EOPNOTSUPP;
-
-		req->error = 0;
-		kiocb->ki_flags |= IOCB_HIPRI;
-		kiocb->ki_complete = io_complete_rw_iopoll;
+		/* this MTK 4.19 tree has no f_op->iopoll, feature unsupported */
+		return -EOPNOTSUPP;
 	} else {
 		if (kiocb->ki_flags & IOCB_HIPRI)
 			return -EINVAL;
@@ -956,8 +960,10 @@ static int io_import_fixed(struct io_ring_ctx *ctx, int rw,
 	if (offset)
 		iov_iter_advance(iter, offset);
 
-	/* don't drop a reference to these pages */
-	iter->type |= ITER_BVEC_FLAG_NO_REF;
+	/* NOTE: this MTK 4.19 tree's iov_iter has no ITER_BVEC_FLAG_NO_REF,
+	 * so fixed-buffer reads will take a page reference like a normal
+	 * bvec iter instead of skipping it. Correct, just not maximally
+	 * optimal. */
 	return 0;
 }
 
@@ -1017,7 +1023,7 @@ static void io_async_list_note(int rw, struct io_kiocb *req, size_t len)
 		/* Use 8x RA size as a decent limiter for both reads/writes */
 		max_pages = filp->f_ra.ra_pages;
 		if (!max_pages)
-			max_pages = VM_READAHEAD_PAGES;
+			max_pages = (VM_MAX_READAHEAD * 1024) / PAGE_SIZE;
 		max_pages *= 8;
 
 		/* If max pages are exceeded, reset the state */
@@ -2065,17 +2071,23 @@ static int io_cqring_wait(struct io_ring_ctx *ctx, int min_events,
 		return 0;
 
 	if (sig) {
+		if (sigsz != sizeof(sigset_t))
+			return -EINVAL;
+
 #ifdef CONFIG_COMPAT
 		if (in_compat_syscall())
-			ret = set_compat_user_sigmask((const compat_sigset_t __user *)sig,
-						      &ksigmask, &sigsaved, sigsz);
+			ret = get_compat_sigset(&ksigmask,
+				(const compat_sigset_t __user *)sig);
 		else
 #endif
-			ret = set_user_sigmask(sig, &ksigmask,
-					       &sigsaved, sigsz);
+			ret = copy_from_user(&ksigmask, sig,
+					      sizeof(ksigmask)) ? -EFAULT : 0;
 
 		if (ret)
 			return ret;
+
+		sigdelsetmask(&ksigmask, sigmask(SIGKILL) | sigmask(SIGSTOP));
+		sigprocmask(SIG_SETMASK, &ksigmask, &sigsaved);
 	}
 
 	do {
@@ -2097,7 +2109,7 @@ static int io_cqring_wait(struct io_ring_ctx *ctx, int min_events,
 	finish_wait(&ctx->wait, &wait);
 
 	if (sig)
-		restore_user_sigmask(sig, &sigsaved);
+		sigprocmask(SIG_SETMASK, &sigsaved, NULL);
 
 	return READ_ONCE(ring->r.head) == READ_ONCE(ring->r.tail) ? ret : 0;
 }
@@ -2560,8 +2572,9 @@ static int io_sqe_buffer_register(struct io_ring_ctx *ctx, void __user *arg,
 
 		ret = 0;
 		down_read(&current->mm->mmap_sem);
-		pret = get_user_pages_longterm(ubuf, nr_pages, FOLL_WRITE,
-						pages, vmas);
+		pret = get_user_pages(ubuf, nr_pages,
+				      FOLL_WRITE | FOLL_LONGTERM,
+				      pages, vmas);
 		if (pret == nr_pages) {
 			/* don't support file backed memory */
 			for (j = 0; j < nr_pages; j++) {
