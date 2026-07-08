@@ -29,12 +29,12 @@
 #define MAIN_LOG_SIZE 256
 #define DEFAULT_TIMER1_MS 100
 #define DEFAULT_TIMER2_MS 1000
-#define DEFAULT_MAX_BOOST_CNT 5
-#define DEFAULT_LOADING_TH 20
+#define DEFAULT_MAX_BOOST_CNT 10
+#define DEFAULT_LOADING_TH 10
 
 static HLIST_HEAD(gbe_boost_units);
 static DEFINE_MUTEX(gbe_lock);
-static int gbe_enable;
+static int gbe_enable = 1;
 static int fg_pid;
 static int TIMER1_MS = DEFAULT_TIMER1_MS;
 static int TIMER2_MS = DEFAULT_TIMER2_MS;
