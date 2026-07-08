@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (c) 2019 MediaTek Inc.
  */
 
 #include <linux/kernel.h>
@@ -70,7 +70,7 @@ void mt_ppm_dlpt_kick_PBM(struct ppm_cluster_status *cluster_status,
 		budget, power_idx, total_core, max_volt);
 
 #ifndef DISABLE_PBM_FEATURE
-#ifdef CONFIG_MTK_AEE_IPANIC
+#ifdef CONFIG_MTK_RAM_CONSOLE
 	aee_rr_rec_ppm_waiting_for_pbm(1);
 	kicker_pbm_by_cpu(budget, total_core, max_volt);
 	aee_rr_rec_ppm_waiting_for_pbm(0);
@@ -97,12 +97,7 @@ void mt_ppm_dlpt_set_limit_by_pbm(unsigned int limited_power)
 	ppm_lock(&dlpt_policy.lock);
 
 	if (!dlpt_policy.is_enabled) {
-		/* dlpt policy is force-disabled by design (see
-		 * ppm_dlpt_policy_init()), so this path is expected on every
-		 * PBM notification. Downgrade to a debug-level message so it
-		 * no longer floods dmesg on every call.
-		 */
-		ppm_dbg(DLPT, "@%s: dlpt policy is not enabled!\n", __func__);
+		ppm_warn("@%s: dlpt policy is not enabled!\n", __func__);
 		ppm_unlock(&dlpt_policy.lock);
 		goto end;
 	}
@@ -172,7 +167,7 @@ static int ppm_dlpt_limit_proc_show(struct seq_file *m, void *v)
 static ssize_t ppm_dlpt_limit_proc_write(struct file *file,
 	const char __user *buffer, size_t count, loff_t *pos)
 {
-	unsigned int limited_power = 0;
+	unsigned int limited_power;
 
 	char *buf = ppm_copy_from_user_for_proc(buffer, count);
 
@@ -203,7 +198,7 @@ static ssize_t ppm_dlpt_budget_trans_percentage_proc_write(
 	struct file *file, const char __user *buffer,
 	size_t count, loff_t *pos)
 {
-	unsigned int percentage = 0;
+	unsigned int percentage;
 
 	char *buf = ppm_copy_from_user_for_proc(buffer, count);
 
@@ -265,7 +260,6 @@ static int __init ppm_dlpt_policy_init(void)
 	ppm_info("@%s: register %s done!\n", __func__, dlpt_policy.name);
 
 out:
-	dlpt_policy.is_enabled = false;
 	FUNC_EXIT(FUNC_LV_POLICY);
 
 	return ret;

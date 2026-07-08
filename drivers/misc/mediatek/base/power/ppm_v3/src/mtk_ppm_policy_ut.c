@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (c) 2019 MediaTek Inc.
  */
 
 #include <linux/kernel.h>
@@ -101,7 +101,7 @@ static ssize_t ppm_ut_fix_core_num_proc_write(struct file *file,
 	ppm_lock(&ut_policy.lock);
 
 	if (!ut_policy.is_enabled) {
-		ppm_dbg(MAIN, "@%s: UT policy is not enabled!\n", __func__);
+		ppm_warn("@%s: UT policy is not enabled!\n", __func__);
 		ppm_unlock(&ut_policy.lock);
 		goto out;
 	}
@@ -210,7 +210,7 @@ static ssize_t ppm_ut_fix_freq_idx_proc_write(struct file *file,
 	ppm_lock(&ut_policy.lock);
 
 	if (!ut_policy.is_enabled) {
-		ppm_dbg(MAIN, "@%s: UT policy is not enabled!\n", __func__);
+		ppm_warn("@%s: UT policy is not enabled!\n", __func__);
 		ppm_unlock(&ut_policy.lock);
 		goto out;
 	}
@@ -311,7 +311,6 @@ static int __init ppm_ut_policy_init(void)
 	ppm_info("@%s: register %s done!\n", __func__, ut_policy.name);
 
 out:
-	ut_policy.is_enabled = false;
 	FUNC_EXIT(FUNC_LV_POLICY);
 
 	return ret;

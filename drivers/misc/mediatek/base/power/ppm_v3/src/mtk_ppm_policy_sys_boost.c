@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (c) 2019 MediaTek Inc.
  */
 
 #include <linux/kernel.h>
@@ -8,6 +8,7 @@
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/slab.h>
+
 #include "mtk_ppm_internal.h"
 
 
@@ -157,7 +158,7 @@ void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 	struct ppm_sysboost_data *data;
 	int i, freq_idx;
 
-	if ((user >= NR_PPM_SYSBOOST_USER) || (user < 0)) {
+	if (user >= NR_PPM_SYSBOOST_USER) {
 		ppm_err("@%s: Invalid input: user = %d, freq = %d\n",
 			__func__, user, freq);
 		return;
@@ -166,7 +167,7 @@ void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 	ppm_lock(&sysboost_policy.lock);
 
 	if (!sysboost_policy.is_enabled) {
-		ppm_dbg(SYS_BOOST, "@%s: sysboost policy is not enabled!\n", __func__);
+		ppm_err("@%s: sysboost policy is not enabled!\n", __func__);
 		ppm_unlock(&sysboost_policy.lock);
 		return;
 	}
@@ -231,7 +232,7 @@ void mt_ppm_sysboost_set_freq_limit(enum ppm_sysboost_user user,
 	if ((max_freq != -1 && max_freq > get_cluster_max_cpufreq(cluster))
 		|| (min_freq != -1
 		&& min_freq < get_cluster_min_cpufreq(cluster))
-		|| user >= NR_PPM_SYSBOOST_USER || user < 0) {
+		|| user >= NR_PPM_SYSBOOST_USER) {
 		ppm_err("Invalid input: user/cl=%d/%d, min/max freq=%d/%d\n",
 			user, cluster, min_freq, max_freq);
 		return;
@@ -246,7 +247,7 @@ void mt_ppm_sysboost_set_freq_limit(enum ppm_sysboost_user user,
 	ppm_lock(&sysboost_policy.lock);
 
 	if (!sysboost_policy.is_enabled) {
-		ppm_dbg(SYS_BOOST, "@%s: sysboost policy is not enabled!\n", __func__);
+		ppm_err("@%s: sysboost policy is not enabled!\n", __func__);
 		ppm_unlock(&sysboost_policy.lock);
 		return;
 	}
@@ -568,10 +569,6 @@ static int __init ppm_sysboost_policy_init(void)
 	ppm_info("@%s: register %s done!\n", __func__, sysboost_policy.name);
 
 out:
-	/* force disabled by default: block XM_THERMAL/PERFSERV throttle
-	 * injection via sys_boost channel while still keeping the policy
-	 * registered (so the /proc interface and existing logic are intact)
-	 */
 	sysboost_policy.is_enabled = false;
 	FUNC_EXIT(FUNC_LV_POLICY);
 
