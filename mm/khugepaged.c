@@ -23,18 +23,10 @@
 #include <asm/pgalloc.h>
 #include "internal.h"
 
-/* gross hack for <=4.19 stable */
-#if defined(CONFIG_S390) || defined(CONFIG_ARM)
-static void tlb_remove_table_smp_sync(void *arg)
-{
-        /* Simply deliver the interrupt */
-}
-
-static void tlb_remove_table_sync_one(void)
-{
-        smp_call_function(tlb_remove_table_smp_sync, NULL, 1);
-}
-#endif
+/*
+ * tlb_remove_table_sync_one() is now provided globally by mm/mmu_gather.c
+ * (declared in asm-generic/tlb.h). Don't redefine it here.
+ */
 
 enum scan_result {
 	SCAN_FAIL,

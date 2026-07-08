@@ -117,7 +117,7 @@ static void tlb_remove_table_smp_sync(void *arg)
 	/* Simply deliver the interrupt */
 }
 
-static void tlb_remove_table_one(void *table)
+void tlb_remove_table_sync_one(void)
 {
 	/*
 	 * This isn't an RCU grace period and hence the page-tables cannot be
@@ -127,6 +127,11 @@ static void tlb_remove_table_one(void *table)
 	 * IRQ disabling. See the comment near struct mmu_table_batch.
 	 */
 	smp_call_function(tlb_remove_table_smp_sync, NULL, 1);
+}
+
+static void tlb_remove_table_one(void *table)
+{
+	tlb_remove_table_sync_one();
 	__tlb_remove_table(table);
 }
 
