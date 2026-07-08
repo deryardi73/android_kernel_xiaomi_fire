@@ -1942,7 +1942,9 @@ static void zram_reset_device(struct zram *zram)
 	if (zram->comp_secondary) {
 		zcomp_destroy(zram->comp_secondary);
 		zram->comp_secondary = NULL;
-		zram->compressor2[0] = '\0';
+		/* keep compressor2 string intact (same as primary
+		 * zram->compressor) so disksize_store() can re-init the
+		 * secondary backend from it after this reset. */
 	}
 	reset_bdev(zram);
 }
