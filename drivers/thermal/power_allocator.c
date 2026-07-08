@@ -70,6 +70,16 @@ static inline s64 div_frac(s64 x, s64 y)
  * @trip_max_desired_temperature:	last passive trip point of the thermal
  *					zone.  The temperature we are
  *					controlling for.
+ * @power_buf:	pre-allocated scratch buffer used by allocate_power() to
+ *		hold req_power/max_power/granted_power/extra_actor_power/
+ *		weighted_req_power for all actors.  Allocated lazily and
+ *		reused across throttle cycles instead of being
+ *		kcalloc'd/kfree'd every time, since the governor's
+ *		throttle() runs on every passive_delay tick.
+ * @power_buf_capacity:	number of actors @power_buf currently has room
+ *			for.  @power_buf is only grown (never shrunk) when
+ *			the number of actors bound to the max desired trip
+ *			increases, to avoid realloc thrashing.
  */
 struct power_allocator_params {
 	bool allocated_tzp;
@@ -77,40 +87,9 @@ struct power_allocator_params {
 	s32 prev_err;
 	int trip_switch_on;
 	int trip_max_desired_temperature;
+	u32 *power_buf;
+	int power_buf_capacity;
 };
-
-/**
- * estimate_sustainable_power() - Estimate the sustainable power of a thermal zone
- * @tz: thermal zone we are operating in
- *
- * For thermal zones that don't provide a sustainable_power in their
- * thermal_zone_params, estimate one.  Calculate it using the minimum
- * power of all the cooling devices as that gives a valid value that
- * can give some degree of functionality.  For optimal performance of
- * this governor, provide a sustainable_power in the thermal zone's
- * thermal_zone_params.
- */
-static u32 estimate_sustainable_power(struct thermal_zone_device *tz)
-{
-	u32 sustainable_power = 0;
-	struct thermal_instance *instance;
-	struct power_allocator_params *params = tz->governor_data;
-
-	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		struct thermal_cooling_device *cdev = instance->cdev;
-		u32 min_power;
-
-		if (instance->trip != params->trip_max_desired_temperature)
-			continue;
-
-		if (power_actor_get_min_power(cdev, tz, &min_power))
-			continue;
-
-		sustainable_power += min_power;
-	}
-
-	return sustainable_power;
-}
 
 /**
  * estimate_pid_constants() - Estimate the constants for the PID controller
@@ -175,6 +154,9 @@ static void estimate_pid_constants(struct thermal_zone_device *tz,
  * pid_controller() - PID controller
  * @tz:	thermal zone we are operating in
  * @control_temp:	the target temperature in millicelsius
+ * @sustainable_power:	sustainable power for the zone, already resolved by
+ *			the caller (either tz->tzp->sustainable_power or an
+ *			estimate accumulated while it walked thermal_instances)
  * @max_allocatable_power:	maximum allocatable power for this thermal zone
  *
  * This PID controller increases the available power budget so that the
@@ -191,22 +173,31 @@ static void estimate_pid_constants(struct thermal_zone_device *tz,
  */
 static u32 pid_controller(struct thermal_zone_device *tz,
 			  int control_temp,
+			  u32 sustainable_power,
 			  u32 max_allocatable_power)
 {
 	s64 p, i, d, power_range;
 	s32 err, max_power_frac;
-	u32 sustainable_power;
 	struct power_allocator_params *params = tz->governor_data;
 
 	max_power_frac = int_to_frac(max_allocatable_power);
 
-	if (tz->tzp->sustainable_power) {
-		sustainable_power = tz->tzp->sustainable_power;
-	} else {
-		sustainable_power = estimate_sustainable_power(tz);
+	if (!tz->tzp->sustainable_power) {
+		/*
+		 * force=false: only fill in k_po/k_pu/k_i that are still 0.
+		 * Using force=true here (as before) recomputed and
+		 * overwrote these constants on *every* throttle cycle,
+		 * silently discarding any runtime tuning done via sysfs
+		 * whenever sustainable_power isn't provided by the thermal
+		 * zone. Estimate once, then respect user/tuned values.
+		 * sustainable_power itself was already computed by the
+		 * caller in the same pass it used to gather req_power/
+		 * max_power, so no extra thermal_instances traversal is
+		 * needed here.
+		 */
 		estimate_pid_constants(tz, sustainable_power,
 				       params->trip_switch_on, control_temp,
-				       true);
+				       false);
 	}
 
 	err = control_temp - tz->temperature;
@@ -338,6 +329,9 @@ static int allocate_power(struct thermal_zone_device *tz,
 	u32 *weighted_req_power;
 	u32 total_req_power, max_allocatable_power, total_weighted_req_power;
 	u32 total_granted_power, power_range;
+	u32 sustainable_power, sustainable_power_acc = 0;
+	bool need_sustainable_power = !tz->tzp->sustainable_power;
+	int default_weight = 1 << FRAC_BITS;
 	int i, num_actors, total_weight, ret = 0;
 	int trip_max_desired_temperature = params->trip_max_desired_temperature;
 
@@ -359,21 +353,43 @@ static int allocate_power(struct thermal_zone_device *tz,
 	}
 
 	/*
-	 * We need to allocate five arrays of the same size:
-	 * req_power, max_power, granted_power, extra_actor_power and
-	 * weighted_req_power.  They are going to be needed until this
-	 * function returns.  Allocate them all in one go to simplify
-	 * the allocation and deallocation logic.
+	 * We need five arrays of the same size: req_power, max_power,
+	 * granted_power, extra_actor_power and weighted_req_power.
+	 * Instead of kcalloc()'ing and kfree()'ing them on every single
+	 * throttle cycle (this function runs on every passive_delay
+	 * tick while the zone is passive), keep a scratch buffer around
+	 * in the governor's private params and only grow it when the
+	 * number of actors increases. It is never shrunk, to avoid
+	 * realloc thrashing if the actor count fluctuates.
 	 */
 	BUILD_BUG_ON(sizeof(*req_power) != sizeof(*max_power));
 	BUILD_BUG_ON(sizeof(*req_power) != sizeof(*granted_power));
 	BUILD_BUG_ON(sizeof(*req_power) != sizeof(*extra_actor_power));
 	BUILD_BUG_ON(sizeof(*req_power) != sizeof(*weighted_req_power));
-	req_power = kcalloc(num_actors * 5, sizeof(*req_power), GFP_KERNEL);
-	if (!req_power) {
-		ret = -ENOMEM;
-		goto unlock;
+
+	if (num_actors > params->power_buf_capacity) {
+		u32 *new_buf = kmalloc_array(num_actors * 5,
+					      sizeof(*new_buf), GFP_KERNEL);
+		if (!new_buf) {
+			ret = -ENOMEM;
+			goto unlock;
+		}
+
+		kfree(params->power_buf);
+		params->power_buf = new_buf;
+		params->power_buf_capacity = num_actors;
 	}
+
+	req_power = params->power_buf;
+	/*
+	 * Zero the slots we're about to use: some instances may fail
+	 * get_requested_power()/power_actor_get_max_power() below and
+	 * get skipped without incrementing i, so trailing slots must
+	 * not carry over stale data from a previous, larger cycle (the
+	 * old kcalloc() implicitly guaranteed this by zeroing on every
+	 * call).
+	 */
+	memset(req_power, 0, num_actors * 5 * sizeof(*req_power));
 
 	max_power = &req_power[num_actors];
 	granted_power = &req_power[2 * num_actors];
@@ -395,14 +411,24 @@ static int allocate_power(struct thermal_zone_device *tz,
 		if (!cdev_is_power_actor(cdev))
 			continue;
 
+		/*
+		 * Fold the sustainable_power estimation into this same
+		 * pass instead of walking thermal_instances a second time
+		 * inside pid_controller()/estimate_sustainable_power().
+		 * Only bother when the zone doesn't already provide a
+		 * fixed sustainable_power, matching the original behavior.
+		 */
+		if (need_sustainable_power) {
+			u32 min_power;
+
+			if (!power_actor_get_min_power(cdev, tz, &min_power))
+				sustainable_power_acc += min_power;
+		}
+
 		if (cdev->ops->get_requested_power(cdev, tz, &req_power[i]))
 			continue;
 
-		if (!total_weight)
-			weight = 1 << FRAC_BITS;
-		else
-			weight = instance->weight;
-
+		weight = total_weight ? instance->weight : default_weight;
 		weighted_req_power[i] = frac_to_int(weight * req_power[i]);
 
 		if (power_actor_get_max_power(cdev, tz, &max_power[i]))
@@ -415,7 +441,11 @@ static int allocate_power(struct thermal_zone_device *tz,
 		i++;
 	}
 
-	power_range = pid_controller(tz, control_temp, max_allocatable_power);
+	sustainable_power = need_sustainable_power ?
+		sustainable_power_acc : tz->tzp->sustainable_power;
+
+	power_range = pid_controller(tz, control_temp, sustainable_power,
+				     max_allocatable_power);
 
 	divvy_up_power(weighted_req_power, max_power, num_actors,
 		       total_weighted_req_power, power_range, granted_power,
@@ -443,7 +473,6 @@ static int allocate_power(struct thermal_zone_device *tz,
 				      max_allocatable_power, tz->temperature,
 				      control_temp - tz->temperature);
 
-	kfree(req_power);
 unlock:
 	mutex_unlock(&tz->lock);
 
@@ -605,6 +634,7 @@ static void power_allocator_unbind(struct thermal_zone_device *tz)
 		tz->tzp = NULL;
 	}
 
+	kfree(params->power_buf);
 	kfree(tz->governor_data);
 	tz->governor_data = NULL;
 }
