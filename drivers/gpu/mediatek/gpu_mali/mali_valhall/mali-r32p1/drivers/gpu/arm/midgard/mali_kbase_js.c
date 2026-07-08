@@ -1193,7 +1193,7 @@ void kbase_js_update_ctx_priority(struct kbase_context *kctx)
 
 	lockdep_assert_held(&kbdev->hwaccess_lock);
 
-	if (kbdev->js_ctx_scheduling_mode == KBASE_JS_SYSTEM_PRIORITY_MODE) {
+	if (1) {
 		/* Determine the new priority for context, as per the priority
 		 * of currently in-use atoms.
 		 */
