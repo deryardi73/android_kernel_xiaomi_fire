@@ -794,7 +794,7 @@ void kbase_job_slot_ctx_priority_check_locked(struct kbase_context *kctx,
 			continue;
 
 		if ((kbdev->js_ctx_scheduling_mode ==
-			KBASE_JS_PROCESS_LOCAL_PRIORITY_MODE) &&
+			KBASE_JS_SYSTEM_PRIORITY_MODE) &&
 				(katom->kctx != kctx))
 			continue;
 
