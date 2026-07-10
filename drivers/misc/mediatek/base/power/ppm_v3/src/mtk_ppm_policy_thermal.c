@@ -11,6 +11,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/topology.h>
+#include <linux/arch_topology.h>
 
 #include "mtk_ppm_internal.h"
 
@@ -114,6 +115,59 @@ unsigned int mt_ppm_thermal_get_cur_power(void)
 		? mt_ppm_thermal_get_max_power() : (unsigned int)power;
 }
 
+/*
+ * Translate this cycle's thermal-capped max frequency for each cluster
+ * into the scheduler's thermal_pressure PELT signal (see
+ * kernel/sched/pelt.c: update_thermal_load_avg() and
+ * kernel/sched/fair.c: scale_rt_capacity()), so EAS energy/capacity
+ * calculations are aware a cluster is currently running below its
+ * nominal max capacity due to thermal throttling.
+ *
+ * This only feeds an already-exported, already-wired-up scheduler
+ * signal (topology_set_thermal_pressure() is compiled in and consumed
+ * by the scheduler regardless of this call); prior to this patch
+ * nothing in the kernel tree ever called it, so the signal stayed 0.
+ */
+static void ppm_thermal_update_sched_pressure(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < ppm_main_info.cluster_num; i++) {
+		struct ppm_cluster_info *cinfo = &ppm_main_info.cluster_info[i];
+		struct cpumask cluster_cpu;
+		unsigned int max_freq, capped_freq;
+		unsigned long max_cap, capped_cap, pressure;
+		int idx = thermal_policy.req.limit[i].max_cpufreq_idx;
+
+		if (!cinfo->dvfs_tbl || idx < 0 || idx >= DVFS_OPP_NUM)
+			continue;
+
+		/* index 0 is always the highest OPP (see get_cluster_max_cpufreq_idx) */
+		max_freq = cinfo->dvfs_tbl[0].frequency;
+		capped_freq = cinfo->dvfs_tbl[idx].frequency;
+
+		if (!max_freq)
+			continue;
+
+		arch_get_cluster_cpus(&cluster_cpu, i);
+		if (cpumask_empty(&cluster_cpu))
+			continue;
+
+		max_cap = topology_get_cpu_scale(NULL, cpumask_first(&cluster_cpu));
+
+		/* not currently capped below max OPP: clear any stale pressure */
+		if (capped_freq >= max_freq) {
+			topology_set_thermal_pressure(&cluster_cpu, 0);
+			continue;
+		}
+
+		capped_cap = (max_cap * capped_freq) / max_freq;
+		pressure = max_cap - capped_cap;
+
+		topology_set_thermal_pressure(&cluster_cpu, pressure);
+	}
+}
+
 static void ppm_thermal_update_limit_cb(void)
 {
 	FUNC_ENTER(FUNC_LV_POLICY);
@@ -122,6 +176,8 @@ static void ppm_thermal_update_limit_cb(void)
 
 	/* update limit according to power budget */
 	ppm_update_req_by_pwr(&thermal_policy.req);
+
+	ppm_thermal_update_sched_pressure();
 
 	FUNC_EXIT(FUNC_LV_POLICY);
 }
@@ -242,4 +298,3 @@ static void __exit ppm_thermal_policy_exit(void)
 
 module_init(ppm_thermal_policy_init);
 module_exit(ppm_thermal_policy_exit);
-

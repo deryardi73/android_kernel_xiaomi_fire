@@ -432,6 +432,22 @@ config HAVE_SCHED_AVG_IRQ
 	depends on IRQ_TIME_ACCOUNTING || PARAVIRT_TIME_ACCOUNTING
 	depends on SMP
 
+config SCHED_THERMAL_PRESSURE
+	bool "Scheduler thermal pressure tracking"
+	depends on SMP
+	depends on ARM64 || ARM
+	default n
+	help
+	  Select this option to enable the scheduler to account for
+	  thermal/DVFS capping when computing a CPU's usable capacity
+	  (e.g. via arch_set_thermal_pressure()/topology_set_thermal_pressure()
+	  called by a platform thermal driver such as MTK PPM). This lets
+	  the energy-aware scheduler and load-balancer make placement
+	  decisions based on the CPU's real, currently-throttled capacity
+	  instead of its nominal maximum.
+
+	  If in doubt, say N here.
+
 config BSD_PROCESS_ACCT
 	bool "BSD Process Accounting"
 	depends on MULTIUSER
