@@ -94,3 +94,69 @@ config DEBUG_RODATA_TEST
     depends on STRICT_KERNEL_RWX
     ---help---
       This option enables a testcase for the setting rodata read-only.
+
+config HAVE_ARCH_KFENCE
+	bool
+
+config KFENCE
+	bool "KFENCE: low-overhead sampling-based memory safety error detector"
+	depends on HAVE_ARCH_KFENCE && (SLAB || SLUB)
+	select STACKTRACE
+	help
+	  KFENCE is a low-overhead sampling-based detector of heap out-of-bounds
+	  access, use-after-free, and invalid-free errors. KFENCE is designed
+	  to be enabled in production kernels, and has near zero performance
+	  overhead.
+
+	  Note that, KFENCE is not a substitute for explicit testing with tools
+	  such as KASAN. KFENCE can detect a subset of bugs that KASAN can
+	  detect, albeit at very different performance characteristics. If you
+	  can afford to use KASAN, continue using KASAN. But for instance, if
+	  you would like to periodically sample your kernel builds for memory
+	  safety, and can afford the smaller (sampled) shield that KFENCE
+	  provides in production, consider enabling KFENCE on your kernel
+	  builds.
+
+	  Say N if you are unsure.
+
+config KFENCE_STATIC_KEYS
+	bool "Use static keys to set up allocations"
+	default y
+	depends on KFENCE && JUMP_LABEL
+	help
+	  Use static keys (static branches) to set up allocations. This option
+	  is only appropriate when the sample interval is expected to be large
+	  (order of seconds), and there is a concern about the performance
+	  impact of using a runtime branch check.
+
+config KFENCE_SAMPLE_INTERVAL
+	int "Default sample interval in milliseconds"
+	default 100
+	depends on KFENCE
+	help
+	  The KFENCE sample interval determines the frequency with which heap
+	  allocations will be guarded by KFENCE. May be overridden via boot
+	  parameter "kfence.sample_interval".
+
+	  Set this to 0 to disable KFENCE by default, in which case only
+	  setting "kfence.sample_interval" to a non-zero value enables KFENCE.
+
+config KFENCE_NUM_OBJECTS
+	int "Number of guarded objects available"
+	range 1 65535
+	default 255
+	depends on KFENCE
+	help
+	  The number of guarded objects available. For each KFENCE object, 2
+	  pages are required; with one containing the object and two adjacent
+	  ones used as guard pages.
+
+config KFENCE_STRESS_TEST_FAULTS
+	int "Stress testing of fault handling and error reporting" if EXPERT
+	default 0
+	depends on KFENCE
+	help
+	  The inverse probability with which to randomly protect KFENCE object
+	  pages, resulting in spurious use-after-free reports. Only useful for
+	  testing to check that error reports are correct. Recommend setting
+	  to a large non-zero value, such as 16 or 32.

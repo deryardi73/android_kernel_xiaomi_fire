@@ -30,6 +30,7 @@
 #include <linux/sched/debug.h>
 #include <linux/highmem.h>
 #include <linux/perf_event.h>
+#include <linux/kfence.h>
 #include <linux/preempt.h>
 #include <linux/hugetlb.h>
 
@@ -454,8 +455,19 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	 * If we're in an interrupt or have no user context, we must not take
 	 * the fault.
 	 */
-	if (faulthandler_disabled() || !mm)
+	if (faulthandler_disabled() || !mm) {
+		/*
+		 * KFENCE guard pages live in the kernel linear map, so a
+		 * fault on them always has mm == NULL (kernel-mode access).
+		 * is_write mirrors the WNR/CM decode done below for the
+		 * normal (mm != NULL) path.
+		 */
+		if (!user_mode(regs) &&
+		    kfence_handle_page_fault(addr, (esr & ESR_ELx_WNR) && !(esr & ESR_ELx_CM),
+					      regs))
+			return 0;
 		goto no_context;
+	}
 
 	if (user_mode(regs))
 		mm_flags |= FAULT_FLAG_USER;

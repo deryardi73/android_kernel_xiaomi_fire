@@ -22,6 +22,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/kasan.h>
+#include <linux/kfence.h>
 #include <linux/cpu.h>
 #include <linux/cpuset.h>
 #include <linux/mempolicy.h>
@@ -2723,6 +2724,10 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	s = slab_pre_alloc_hook(s, gfpflags);
 	if (!s)
 		return NULL;
+
+	object = kfence_alloc(s, s->object_size, gfpflags);
+	if (unlikely(object))
+		goto kfence_out;
 redo:
 	/*
 	 * Must read kmem_cache cpu data via this cpu ptr. Preemption is
@@ -2796,6 +2801,7 @@ redo:
 	if (unlikely(slab_want_init_on_alloc(gfpflags, s)) && object)
 		memset(object, 0, s->object_size);
 
+kfence_out:
 	slab_post_alloc_hook(s, gfpflags, 1, &object);
 
 	return object;
@@ -3041,6 +3047,14 @@ static __always_inline void slab_free(struct kmem_cache *s, struct page *page,
 				      void *head, void *tail, int cnt,
 				      unsigned long addr)
 {
+	/*
+	 * KFENCE objects live one-per-page, so a build_detached_freelist()
+	 * bulk-free batch grouped by page can only ever contain a single
+	 * KFENCE object (cnt == 1 whenever head is a KFENCE address).
+	 */
+	if (kfence_free(head))
+		return;
+
 	/*
 	 * With KASAN enabled slab_free_freelist_hook modifies the freelist
 	 * to remove objects, whose reuse must be delayed.
@@ -3972,9 +3986,14 @@ void __check_heap_object(const void *ptr, unsigned long n, struct page *page,
 static size_t __ksize(const void *object)
 {
 	struct page *page;
+	size_t kfence_size;
 
 	if (unlikely(object == ZERO_SIZE_PTR))
 		return 0;
+
+	kfence_size = kfence_ksize(object);
+	if (unlikely(kfence_size))
+		return kfence_size;
 
 	page = virt_to_head_page(object);
 

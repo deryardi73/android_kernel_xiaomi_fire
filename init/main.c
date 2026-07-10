@@ -74,6 +74,7 @@
 #include <linux/sfi.h>
 #include <linux/shmem_fs.h>
 #include <linux/slab.h>
+#include <linux/kfence.h>
 #include <linux/perf_event.h>
 #include <linux/ptrace.h>
 #include <linux/pti.h>
@@ -603,6 +604,10 @@ asmlinkage __visible void __init start_kernel(void)
 	vfs_caches_init_early();
 	sort_main_extable();
 	trap_init();
+	/* KFENCE pool must be carved out of memblock before the page
+	 * allocator takes over (mm_init() -> mem_init()).
+	 */
+	kfence_alloc_pool();
 	mm_init();
 
 	ftrace_init();
@@ -753,6 +758,9 @@ asmlinkage __visible void __init start_kernel(void)
 	if (efi_enabled(EFI_RUNTIME_SERVICES)) {
 		efi_free_boot_services();
 	}
+
+	/* Requires system_wq, set up by workqueue_init_early() above. */
+	kfence_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
