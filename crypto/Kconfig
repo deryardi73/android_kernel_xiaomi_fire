@@ -1824,6 +1824,17 @@ config CRYPTO_LZO
 	help
 	  This is the LZO algorithm.
 
+config CRYPTO_LZORLE
+	tristate "LZO-RLE compression algorithm"
+	select CRYPTO_ALGAPI
+	select CRYPTO_ACOMP2
+	select LZO_COMPRESS
+	select LZO_DECOMPRESS
+	help
+	  This is the LZO-RLE algorithm. Adds run-length encoding on top of
+	  plain LZO, giving notably faster compression for data with long
+	  runs of zero bytes (common on zram/zswap RAM pages).
+
 config CRYPTO_842
 	tristate "842 compression algorithm"
 	select CRYPTO_ALGAPI
