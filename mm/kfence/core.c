@@ -505,7 +505,7 @@ err:
 	 * fails for the first page, and therefore expect addr==__kfence_pool in
 	 * most failure cases.
 	 */
-	memblock_free_late(__pa(addr), KFENCE_POOL_SIZE - (addr - (unsigned long)__kfence_pool));
+	__memblock_free_late(__pa(addr), KFENCE_POOL_SIZE - (addr - (unsigned long)__kfence_pool));
 	__kfence_pool = NULL;
 	return false;
 }
@@ -636,7 +636,7 @@ void __init kfence_alloc_pool(void)
 	if (!kfence_sample_interval)
 		return;
 
-	__kfence_pool = memblock_alloc(KFENCE_POOL_SIZE, PAGE_SIZE);
+	__kfence_pool = phys_to_virt(memblock_alloc(KFENCE_POOL_SIZE, PAGE_SIZE));
 
 	if (!__kfence_pool)
 		pr_err("failed to allocate pool\n");
