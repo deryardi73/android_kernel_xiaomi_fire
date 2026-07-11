@@ -416,8 +416,7 @@ void print_cfs_rq_at_AEE(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 #ifdef DEBUG
 	SEQ_printf_at_AEE(m, "  .%-30s: %lu\n", "spread0",
 		SPLIT_NS(spread0));
-	SEQ_printf_at_AEE(m, "  .%-30s: %d\n", "nr_spread_over",
-		cfs_rq->nr_spread_over);
+	/* nr_spread_over removed from struct cfs_rq upstream; no longer printed. */
 #endif
 
 	SEQ_printf_at_AEE(m, "  .%-30s: %d\n",
