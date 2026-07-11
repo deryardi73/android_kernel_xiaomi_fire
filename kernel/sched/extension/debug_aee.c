@@ -371,6 +371,21 @@ static void print_cfs_group_stats_at_AEE(struct seq_file *m,
 }
 #endif
 
+/*
+ * Local copy of __pick_last_entity(): the mainline version in
+ * kernel/sched/fair.c is only compiled under CONFIG_SCHED_DEBUG, which is
+ * disabled in this config, so it isn't available to link against here.
+ */
+static struct sched_entity *aee_pick_last_entity(struct cfs_rq *cfs_rq)
+{
+	struct rb_node *last = rb_last(&cfs_rq->tasks_timeline.rb_root);
+
+	if (!last)
+		return NULL;
+
+	return rb_entry(last, struct sched_entity, run_node);
+}
+
 void print_cfs_rq_at_AEE(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 {
 	s64 MIN_vruntime = -1, min_vruntime, max_vruntime = -1,
@@ -393,7 +408,7 @@ void print_cfs_rq_at_AEE(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 			&flags, m, "print_cfs_rq_at_AEE");
 	if (rb_first_cached(&cfs_rq->tasks_timeline))
 		MIN_vruntime = (__pick_first_entity(cfs_rq))->vruntime;
-	last = __pick_last_entity(cfs_rq);
+	last = aee_pick_last_entity(cfs_rq);
 	if (last)
 		max_vruntime = last->vruntime;
 	min_vruntime = cfs_rq->min_vruntime;
