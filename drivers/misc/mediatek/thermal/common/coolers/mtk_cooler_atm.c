@@ -287,7 +287,7 @@ enum {
 static struct phpb_param phpb_params[NR_PHPB_PARAMS];
 static const int phpb_theta_min = 1;
 static int phpb_theta_max = 4;
-static int tj_stable_range = 1000;
+static int tj_stable_range = 500;
 
 #if 0
 #define MAX_GPU_POWER_SMA_LEN	(32)
