@@ -8,9 +8,37 @@
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/slab.h>
+#include <linux/workqueue.h>
+#include <linux/jiffies.h>
 
 #include "mtk_ppm_internal.h"
 
+/*
+ * Auto-release watchdog for sys_boost floors.
+ *
+ * On MIUI/HyperOS, a proprietary "XM_THERM" component actively
+ * moderates/releases sys_boost floors based on thermal state, so a
+ * floor never stays stuck. On AOSP-based ROMs that component doesn't
+ * exist, so a floor set by any boost user (e.g. touch/launch boost)
+ * can remain asserted indefinitely if the userspace caller never
+ * issues the matching release, keeping CPU pinned high and causing
+ * heavy compensatory thermal throttling.
+ *
+ * This watchdog auto-releases any user's floor that hasn't been
+ * refreshed within PPM_SYSBOOST_AUTO_RELEASE_MS. Legitimate boost
+ * usage refreshes far more often than this timeout, so it is a no-op
+ * during normal operation on any ROM (including stock, where
+ * XM_THERM already releases floors well before this fires) and only
+ * intervenes when a floor has genuinely been abandoned.
+ */
+#define PPM_SYSBOOST_AUTO_RELEASE_MS	8000
+#define PPM_SYSBOOST_CHECK_INTERVAL_MS	2000
+
+static unsigned int sysboost_auto_release_ms = PPM_SYSBOOST_AUTO_RELEASE_MS;
+module_param(sysboost_auto_release_ms, uint, 0644);
+
+static void ppm_sysboost_auto_release_work(struct work_struct *work);
+static struct delayed_work sysboost_auto_release_dwork;
 
 static void ppm_sysboost_update_limit_cb(void);
 static void ppm_sysboost_status_change_cb(bool enable);
@@ -34,6 +62,7 @@ struct ppm_sysboost_data {
 
 	struct ppm_user_limit limit[NR_PPM_CLUSTERS];
 	struct list_head link;
+	unsigned long last_update_jiffies;
 };
 
 static LIST_HEAD(sysboost_user_list);
@@ -201,6 +230,7 @@ void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 
 				data->limit[i].min_freq_idx = freq_idx;
 			}
+			data->last_update_jiffies = jiffies;
 		}
 	}
 
@@ -270,6 +300,9 @@ void mt_ppm_sysboost_set_freq_limit(enum ppm_sysboost_user user,
 				< data->limit[cluster].max_freq_idx)
 				data->limit[cluster].min_freq_idx =
 					data->limit[cluster].max_freq_idx;
+
+			if (min_freq != -1 || max_freq != -1)
+				data->last_update_jiffies = jiffies;
 		}
 	}
 
@@ -465,6 +498,63 @@ end:
 	return count;
 }
 
+/*
+ * Periodically scan all sys_boost users. Any user that currently
+ * holds an active floor (min_freq_idx or min_core_num set) but hasn't
+ * had that floor refreshed within sysboost_auto_release_ms is treated
+ * as abandoned and released. This only ever fires for floors nobody
+ * is actively maintaining, so it does not affect any legitimate,
+ * repeatedly-refreshed boost sequence on any ROM.
+ */
+static void ppm_sysboost_auto_release_work(struct work_struct *work)
+{
+	struct ppm_sysboost_data *data;
+	unsigned long timeout = msecs_to_jiffies(sysboost_auto_release_ms);
+	bool need_update = false;
+	int i;
+
+	ppm_lock(&sysboost_policy.lock);
+
+	list_for_each_entry(data, &sysboost_user_list, link) {
+		bool has_limit = false;
+
+		for_each_ppm_clusters(i) {
+			if (data->limit[i].min_freq_idx != -1
+				|| data->limit[i].min_core_num != -1) {
+				has_limit = true;
+				break;
+			}
+		}
+
+		if (has_limit && time_after(jiffies,
+			data->last_update_jiffies + timeout)) {
+			ppm_warn(
+				"sysboost user %s stale for >%ums, auto releasing\n",
+				data->user_name, sysboost_auto_release_ms);
+
+			data->min_freq = 0;
+			for_each_ppm_clusters(i) {
+				data->limit[i].min_freq_idx = -1;
+				data->limit[i].max_freq_idx = -1;
+				data->limit[i].min_core_num = -1;
+				data->limit[i].max_core_num = -1;
+			}
+			need_update = true;
+		}
+	}
+
+	if (need_update)
+		ppm_sysboost_update_final_limit();
+
+	ppm_unlock(&sysboost_policy.lock);
+
+	if (need_update)
+		mt_ppm_main();
+
+	schedule_delayed_work(&sysboost_auto_release_dwork,
+		msecs_to_jiffies(PPM_SYSBOOST_CHECK_INTERVAL_MS));
+}
+
 PROC_FOPS_RW(sysboost_freq);
 PROC_FOPS_RW(sysboost_cluster_freq_limit);
 PROC_FOPS_RW(sysboost_cluster_freqidx_limit);
@@ -556,6 +646,7 @@ static int __init ppm_sysboost_policy_init(void)
 			sysboost_data[i].limit[j].min_core_num = -1;
 			sysboost_data[i].limit[j].max_core_num = -1;
 		}
+		sysboost_data[i].last_update_jiffies = jiffies;
 
 		list_add(&sysboost_data[i].link, &sysboost_user_list);
 	}
@@ -566,9 +657,15 @@ static int __init ppm_sysboost_policy_init(void)
 		goto out;
 	}
 
+	INIT_DELAYED_WORK(&sysboost_auto_release_dwork,
+		ppm_sysboost_auto_release_work);
+	schedule_delayed_work(&sysboost_auto_release_dwork,
+		msecs_to_jiffies(PPM_SYSBOOST_CHECK_INTERVAL_MS));
+
 	ppm_info("@%s: register %s done!\n", __func__, sysboost_policy.name);
 
 out:
+	sysboost_policy.is_enabled = false;
 	FUNC_EXIT(FUNC_LV_POLICY);
 
 	return ret;
@@ -577,6 +674,8 @@ out:
 static void __exit ppm_sysboost_policy_exit(void)
 {
 	FUNC_ENTER(FUNC_LV_POLICY);
+
+	cancel_delayed_work_sync(&sysboost_auto_release_dwork);
 
 	kfree(sysboost_final_limit.limit);
 
