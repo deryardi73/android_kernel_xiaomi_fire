@@ -66,6 +66,30 @@ unsigned int mt_ppm_thermal_get_min_power(void)
 	return (unsigned int)ppm_get_min_pwr_idx();
 }
 
+/*
+ * Returns the max_cpufreq_idx thermal is currently actively enforcing
+ * for the given cluster, or -1 if thermal isn't currently throttling
+ * (not enabled, not activated, or out-of-range cluster).
+ *
+ * Other policies with lower priority than thermal (e.g. sys_boost)
+ * can use this to make sure a request they submit doesn't get merged
+ * in a way that ends up overriding thermal's active ceiling - see
+ * ppm_sysboost_update_limit_cb() in mtk_ppm_policy_sys_boost.c.
+ */
+int mt_ppm_thermal_get_active_max_cpufreq_idx(unsigned int cluster_id)
+{
+	int idx = -1;
+
+	ppm_lock(&thermal_policy.lock);
+	if (thermal_policy.is_enabled && thermal_policy.is_activated
+		&& cluster_id < thermal_policy.req.cluster_num)
+		idx = thermal_policy.req.limit[cluster_id].max_cpufreq_idx;
+	ppm_unlock(&thermal_policy.lock);
+
+	return idx;
+}
+EXPORT_SYMBOL(mt_ppm_thermal_get_active_max_cpufreq_idx);
+
 unsigned int mt_ppm_thermal_get_max_power(void)
 {
 	return (unsigned int)ppm_get_max_pwr_idx();

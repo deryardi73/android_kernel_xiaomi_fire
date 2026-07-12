@@ -43,6 +43,9 @@ static struct delayed_work sysboost_auto_release_dwork;
 static void ppm_sysboost_update_limit_cb(void);
 static void ppm_sysboost_status_change_cb(bool enable);
 
+/* defined in mtk_ppm_policy_thermal.c */
+extern int mt_ppm_thermal_get_active_max_cpufreq_idx(unsigned int cluster_id);
+
 /* other members will init by ppm_main */
 static struct ppm_policy_data sysboost_policy = {
 	.name			= __stringify(PPM_POLICY_SYS_BOOST),
@@ -327,6 +330,8 @@ static void ppm_sysboost_update_limit_cb(void)
 		ppm_clear_policy_limit(&sysboost_policy);
 
 		for (i = 0; i < req->cluster_num; i++) {
+			int thermal_max_idx;
+
 			req->limit[i].min_cpufreq_idx =
 				(p->limit[i].min_freq_idx == -1)
 				? req->limit[i].min_cpufreq_idx
@@ -335,6 +340,26 @@ static void ppm_sysboost_update_limit_cb(void)
 				(p->limit[i].max_freq_idx == -1)
 				? req->limit[i].max_cpufreq_idx
 				: p->limit[i].max_freq_idx;
+
+			/*
+			 * Never submit a ceiling looser than thermal's
+			 * currently active one. sys_boost's own ceiling
+			 * normally stays at the cluster's absolute max
+			 * (thermal isn't in the picture at all here), so
+			 * without this, merging sys_boost's request later
+			 * in priority order can widen the ceiling thermal
+			 * already narrowed - see ppm_main_update_limit()
+			 * in mtk_ppm_main.c. The min_cpufreq_idx (floor)
+			 * is then reconciled against this by the existing
+			 * error check right below, same as it already does
+			 * for sys_boost's own internal floor/ceiling
+			 * conflicts.
+			 */
+			thermal_max_idx =
+				mt_ppm_thermal_get_active_max_cpufreq_idx(i);
+			if (thermal_max_idx != -1
+				&& thermal_max_idx > req->limit[i].max_cpufreq_idx)
+				req->limit[i].max_cpufreq_idx = thermal_max_idx;
 		}
 
 		/* error check */
