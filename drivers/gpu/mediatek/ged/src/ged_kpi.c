@@ -270,7 +270,7 @@ static unsigned int is_GED_KPI_enabled = 1;
 static unsigned int ap_self_frc_detection_rate = 20;
 #ifdef GED_ENABLE_FB_DVFS
 static unsigned int g_force_gpu_dvfs_fallback;
-static int g_fb_dvfs_threshold = 80;
+static int g_fb_dvfs_threshold = 40;
 module_param(g_fb_dvfs_threshold, int, 0644);
 #endif /* GED_ENABLE_FB_DVFS */
 module_param(gx_dfps, uint, 0644);
@@ -322,7 +322,7 @@ static int boost_accum_cpu;
 static long target_t_cpu_remained = 20000000;
 /* static long target_t_cpu_remained_min = 8300000; */
 /* default 0.5 vsync period */
-static int cpu_boost_policy = 1;
+static int cpu_boost_policy = 0;
 static int boost_extra = 1;
 static int boost_amp;
 static int deboost_reduce;
