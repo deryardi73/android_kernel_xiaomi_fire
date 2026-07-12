@@ -1639,13 +1639,13 @@ static int fb_notifier_callback(struct notifier_block *self,
         if (FB_EARLY_EVENT_BLANK == event) {
             FTS_INFO("resume: event = %lu, not care\n", event);
         } else if (FB_EVENT_BLANK == event) {
-            //queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
+            fts_resume();
         }
         break;
     case FB_BLANK_POWERDOWN:
         if (FB_EARLY_EVENT_BLANK == event) {
             cancel_work_sync(&fts_data->resume_work);
-           // fts_ts_suspend(ts_data->dev);
+            fts_suspend();
         } else if (FB_EVENT_BLANK == event) {
             FTS_INFO("suspend: event = %lu, not care\n", event);
         }

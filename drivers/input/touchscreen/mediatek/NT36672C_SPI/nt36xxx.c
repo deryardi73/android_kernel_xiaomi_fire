@@ -2840,10 +2840,10 @@ static int nvt_fb_notifier_callback(struct notifier_block *self, unsigned long e
 		blank = evdata->data;
 		if (*blank == FB_BLANK_UNBLANK) {
 			NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
-			/*ret = queue_work(nvt_touch_resume_workqueue, &nvt_touch_resume_work);
+			ret = queue_work(nvt_touch_resume_workqueue, &nvt_touch_resume_work);
 			if(!ret){
 				NVT_LOG("NVT RESUME FAILD\n");
-			}*/
+			}
 		}
 	}
 	return 0;
