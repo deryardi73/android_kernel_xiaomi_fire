@@ -773,11 +773,24 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
 
     /*gesture*/
     if (ts_data->suspended && ts_data->gesture_support) {
-        ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
-        if ((ret >= 0) && (gesture_en == ENABLE))
-            return TOUCH_GESTURE;
-        else
-            FTS_DEBUG("gesture not enable in fw, don't process gesture");
+        int i;
+
+        /*
+         * The very first register read right as the device wakes
+         * from a deep suspend via the gesture IRQ can transiently
+         * fail/misread if the comms bus isn't fully settled yet,
+         * even though the IC is genuinely still in gesture mode
+         * (confirmed moments earlier in fts_gesture_suspend()).
+         * Retry a few times before giving up on the gesture, same
+         * pattern already used in fts_gesture_suspend()/resume().
+         */
+        for (i = 0; i < 5; i++) {
+            ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
+            if ((ret >= 0) && (gesture_en == ENABLE))
+                return TOUCH_GESTURE;
+            msleep(1);
+        }
+        FTS_DEBUG("gesture not enable in fw, don't process gesture");
     }
 
     if ((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
