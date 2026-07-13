@@ -771,32 +771,60 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
     if (ret)
         return TOUCH_IGNORE;
 
+    /*
+     * Check for a corrupted/uninitialized report BEFORE deciding the
+     * gesture is unavailable. A 0xFF touch buffer means the IC itself
+     * is still mid-reset/recovery (comms weren't just "briefly
+     * unsettled" - the whole report is garbage), which can easily take
+     * longer than a few ms to clear. If we checked FTS_REG_GESTURE_EN
+     * first and gave up early, we'd permanently drop the very tap that
+     * woke the IRQ, since nothing re-processes it after recovery runs.
+     */
+    if ((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
+        && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)) {
+        FTS_INFO("touch buff is 0xff, need recovery state");
+
+        if (ts_data->suspended && ts_data->gesture_support) {
+            /*
+             * Give the IC a real chance to come back (same budget
+             * fts_wait_tp_to_valid() uses elsewhere) before treating
+             * this as a lost gesture. If it recovers in time and
+             * gesture mode is still enabled, let the normal
+             * TOUCH_GESTURE path read the gesture data - don't drop
+             * the tap just because the report buffer was transiently
+             * garbage.
+             */
+            if (fts_wait_tp_to_valid() == 0) {
+                ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
+                if ((ret >= 0) && (gesture_en == ENABLE))
+                    return TOUCH_GESTURE;
+            }
+            FTS_DEBUG("gesture not enable in fw after recovery, don't process gesture");
+        }
+
+        return TOUCH_FW_INIT;
+    }
+
     /*gesture*/
     if (ts_data->suspended && ts_data->gesture_support) {
         int i;
 
         /*
-         * The very first register read right as the device wakes
-         * from a deep suspend via the gesture IRQ can transiently
-         * fail/misread if the comms bus isn't fully settled yet,
-         * even though the IC is genuinely still in gesture mode
-         * (confirmed moments earlier in fts_gesture_suspend()).
-         * Retry a few times before giving up on the gesture, same
-         * pattern already used in fts_gesture_suspend()/resume().
+         * Fast path: touch buffer looked fine, but the comms bus can
+         * still be briefly unsettled right as the device wakes from
+         * deep suspend via the gesture IRQ, even though the IC is
+         * genuinely still in gesture mode (confirmed moments earlier
+         * in fts_gesture_suspend()). Retry a few times before giving
+         * up, same pattern already used in
+         * fts_gesture_suspend()/resume().
          */
         for (i = 0; i < 5; i++) {
             ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
             if ((ret >= 0) && (gesture_en == ENABLE))
                 return TOUCH_GESTURE;
-            msleep(1);
+            msleep(5);
         }
         FTS_DEBUG("gesture not enable in fw, don't process gesture");
-    }
-
-    if ((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
-        && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)) {
-        FTS_INFO("touch buff is 0xff, need recovery state");
-        return TOUCH_FW_INIT;
     }
 
     return ((touch_buf[FTS_TOUCH_E_NUM] >> 4) & 0x0F);
