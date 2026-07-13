@@ -773,26 +773,47 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
 
     /*
      * Check for a corrupted/uninitialized report BEFORE deciding the
-     * gesture is unavailable. A 0xFF touch buffer means the IC itself
-     * is still mid-reset/recovery (comms weren't just "briefly
-     * unsettled" - the whole report is garbage), which can easily take
-     * longer than a few ms to clear. If we checked FTS_REG_GESTURE_EN
-     * first and gave up early, we'd permanently drop the very tap that
-     * woke the IRQ, since nothing re-processes it after recovery runs.
+     * gesture is unavailable.
+     *
+     * On this IC family (ids.type 0x87/0x88/<=0x25 -> GESTURE_BM_TOUCH,
+     * see focaltech_gesture.c) the gesture point data is embedded in
+     * THIS SAME touch report buffer - it is not a separate register.
+     * So a 0xFF report during a suspended gesture-wake IRQ doesn't
+     * just mean "the gesture flag is momentarily unreadable" - it
+     * means the one and only copy of the tap that woke us up came
+     * back corrupted in this transaction. Polling something else
+     * afterwards (chip id, GESTURE_EN) can succeed near-instantly
+     * while still telling us nothing about the actual tap, because
+     * that data was never latched anywhere else to re-read.
+     *
+     * The only thing that can still recover the tap itself is
+     * re-issuing the SAME touch data read quickly, before the IC
+     * moves on. Try that first.
      */
     if ((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
         && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)) {
+        int i;
+
+        if (ts_data->suspended && ts_data->gesture_support) {
+            for (i = 0; i < 5; i++) {
+                usleep_range(200, 500);
+                ret = fts_read_touchdata(ts_data, touch_buf);
+                if ((ret == 0) &&
+                    !((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
+                      && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)))
+                    goto recheck_gesture;
+            }
+        }
+
         FTS_INFO("touch buff is 0xff, need recovery state");
 
         if (ts_data->suspended && ts_data->gesture_support) {
             /*
-             * Give the IC a real chance to come back (same budget
-             * fts_wait_tp_to_valid() uses elsewhere) before treating
-             * this as a lost gesture. If it recovers in time and
-             * gesture mode is still enabled, let the normal
-             * TOUCH_GESTURE path read the gesture data - don't drop
-             * the tap just because the report buffer was transiently
-             * garbage.
+             * Raw re-read didn't bring the tap back (IC likely
+             * genuinely reset, not just a bus glitch). Give it the
+             * full recovery budget and check GESTURE_EN so at least
+             * a currently-in-flight second tap / the next one isn't
+             * dropped too, even though this specific tap is gone.
              */
             if (fts_wait_tp_to_valid() == 0) {
                 ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
@@ -805,6 +826,7 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
         return TOUCH_FW_INIT;
     }
 
+recheck_gesture:
     /*gesture*/
     if (ts_data->suspended && ts_data->gesture_support) {
         int i;
