@@ -3892,7 +3892,7 @@ defined(CONFIG_MTK_CAM_SECURITY_SUPPORT)
 		/* PE 2.0 */
 		pe20_ichg_level_threshold = <1000000>; /* uA */
 		ta_start_battery_soc = <0>;
-		ta_stop_battery_soc = <85>;
+		ta_stop_battery_soc = <95>;
 
 		/* PE 4.0 */
 		high_temp_to_leave_pe40 = <46>;
@@ -3908,7 +3908,7 @@ defined(CONFIG_MTK_CAM_SECURITY_SUPPORT)
 		pe40_dual_charger_input_current = <3000000>;
 		pe40_dual_charger_chg1_current = <2000000>;
 		pe40_dual_charger_chg2_current = <2000000>;
-		pe40_stop_battery_soc = <80>;
+		pe40_stop_battery_soc = <95>;
 
 		/* PE 4.0 cable impedance (mohm) */
 		pe40_r_cable_1a_lower = <518>;
@@ -3934,7 +3934,7 @@ defined(CONFIG_MTK_CAM_SECURITY_SUPPORT)
 		pd_vbus_low_bound = <5000000>;
 		pd_vbus_upper_bound = <9000000>;
 		pd_ichg_level_threshold = <1000000>; /* uA */
-		pd_stop_battery_soc = <80>;
+		pd_stop_battery_soc = <95>;
 
 		ibus_err = <14>;
 		vsys_watt = <5000000>;
