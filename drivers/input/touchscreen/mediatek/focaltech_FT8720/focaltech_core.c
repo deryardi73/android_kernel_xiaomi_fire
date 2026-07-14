@@ -851,6 +851,31 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
                     FTS_INFO("DERY_V2_MARKER: post-recovery refresh failed, no valid gesture data");
                 }
             }
+
+            /*
+             * DERY_V3_MARKER: everything above is soft recovery (register
+             * writes only, via fts_tp_state_recovery()/fts_gesture_recovery()
+             * in the caller). That is a no-op if the IC actually crashed
+             * out of its RAM-resident app firmware and fell back into boot
+             * ROM - which is the realistic explanation for a persistent
+             * 0xff report here, since ESD checking (the watchdog that
+             * would normally catch and reflash a crashed IC) is
+             * deliberately skipped while suspended. A boot-ROM IC cannot
+             * assert the touch INT line again, so every gesture after this
+             * one is silently lost until the user physically wakes the
+             * device via the power key.
+             *
+             * fts_fw_recovery() already exists for exactly this situation
+             * and is used for the analogous 0xEF abnormal-data signature
+             * in fts_read_touchdata() above - it checks reg 0xD0 itself
+             * and safely no-ops if the IC is not actually in boot mode, so
+             * it is safe to call unconditionally here as a fallback. Since
+             * ts_data->suspended is still true at this point, FW_AUTO
+             * inside fts_fw_resume() will correctly reflash the gesture
+             * firmware (not normal-mode firmware).
+             */
+            fts_fw_recovery();
+
             FTS_DEBUG("gesture not enable in fw after recovery, don't process gesture");
         }
 
