@@ -854,29 +854,32 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
 
             /*
              * DERY_V3_MARKER: everything above is soft recovery (register
-             * writes only, via fts_tp_state_recovery()/fts_gesture_recovery()
-             * in the caller). That is a no-op if the IC actually crashed
-             * out of its RAM-resident app firmware and fell back into boot
-             * ROM - which is the realistic explanation for a persistent
-             * 0xff report here, since ESD checking (the watchdog that
-             * would normally catch and reflash a crashed IC) is
-             * deliberately skipped while suspended. A boot-ROM IC cannot
-             * assert the touch INT line again, so every gesture after this
-             * one is silently lost until the user physically wakes the
-             * device via the power key.
+             * reads/writes only). Confirmed by field testing that this is
+             * not enough: the IC answers ID reads fine (it is not crashed
+             * into boot ROM - fts_fw_recovery() correctly no-ops on this
+             * path, since its own bootid check comes back "not boot mode"),
+             * yet the touch-report register keeps coming back 0xff across
+             * 15+ retries, and every gesture IRQ for the rest of the
+             * suspend period is silently lost afterwards. That combination
+             * points at the IC's report-ready state - and very possibly
+             * the INT line itself, since the interrupt is falling-edge
+             * triggered and a line stuck low the IC can't reissue - not
+             * getting cleanly reset by register writes alone.
              *
-             * fts_fw_recovery() already exists for exactly this situation
-             * and is used for the analogous 0xEF abnormal-data signature
-             * in fts_read_touchdata() above - it checks reg 0xD0 itself
-             * and safely no-ops if the IC is not actually in boot mode, so
-             * it is safe to call unconditionally here as a fallback. Since
-             * ts_data->suspended is still true at this point, FW_AUTO
-             * inside fts_fw_resume() will correctly reflash the gesture
-             * firmware (not normal-mode firmware).
+             * A full hardware reset + gesture-firmware re-download fixes
+             * both possible causes unconditionally. fts_enter_gesture_fw()
+             * is the same call fts_gesture_suspend() used to enter gesture
+             * mode in the first place - internally it pulses the physical
+             * reset line (need_reset=true down to fts_fw_write_start()),
+             * which forces INT back to its idle level regardless of what
+             * state the IC was stuck in, then reloads and re-arms gesture
+             * firmware from a known-clean state rather than poking
+             * registers on top of whatever state the IC is currently in.
              */
-            fts_fw_recovery();
-
-            FTS_DEBUG("gesture not enable in fw after recovery, don't process gesture");
+            if (fts_enter_gesture_fw() < 0)
+                FTS_ERROR("DERY_V3_MARKER: hard gesture re-entry failed");
+            else
+                FTS_INFO("DERY_V3_MARKER: hard reset + gesture re-entry done");
         }
 
         return TOUCH_FW_INIT;
@@ -1089,18 +1092,6 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
 static irqreturn_t fts_irq_handler(int irq, void *data)
 {
     struct fts_ts_data *ts_data = fts_data;
-
-    /*
-     * DERY_V3_MARKER: unconditional, first line of the handler - fires
-     * on every hardware edge on the touch INT line, regardless of PM
-     * wait/timeout, proximity short-circuit, or what fts_read_parse_touchdata
-     * later decides about the data. Purely a diagnostic to tell apart
-     * "the IC/GPIO never interrupts again after the first suspend-entry
-     * event" from "it interrupts fine, the data path just drops it".
-     */
-    FTS_INFO("DERY_V3_MARKER: irq entry, suspended=%d, jiffies=%lu",
-             ts_data->suspended, jiffies);
-
 #if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
     int ret = 0;
 
