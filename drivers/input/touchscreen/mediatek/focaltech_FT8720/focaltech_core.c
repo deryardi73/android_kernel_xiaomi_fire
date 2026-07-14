@@ -88,6 +88,22 @@ struct notifier_block fts_psenable_nb;
 struct fts_ts_data *fts_data;
 int tp_sensor_flag;
 bool gesture_support;
+/*
+ * DERY_V4_MARKER: set to true the instant gesture mode is (re-)armed
+ * (fts_gesture_suspend() in focaltech_gesture.c, and the hard-reset
+ * fallback below in fts_read_parse_touchdata()). Field-confirmed: arming
+ * gesture mode unconditionally fires exactly one spurious IRQ with an
+ * all-0xff report ~10ms later, every single time, unrelated to an actual
+ * tap. Treating that expected IRQ as a failure and re-arming gesture mode
+ * in response re-triggers the same spurious IRQ, which without this flag
+ * caused an infinite ~257ms reset loop that never settles into a state
+ * where it can catch a real tap. The first 0xff report seen while this
+ * flag is set is swallowed for free (no retry/recovery cost); the flag
+ * is then cleared so any 0xff after that point is treated as a real,
+ * unexpected failure again.
+ */
+bool fts_gesture_reentry_pending;
+
 
 /*****************************************************************************
 * Static function prototypes
@@ -794,6 +810,22 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
         && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)) {
         int i;
 
+        /*
+         * DERY_V4_MARKER: this is the one expected sync IRQ that always
+         * follows arming gesture mode - not a real dropped tap. Consume
+         * it silently and return immediately, before spending any retry
+         * budget or triggering the hard-reset fallback further down
+         * (which would just re-arm gesture mode and cause this exact
+         * same IRQ again, looping forever - confirmed in the field as a
+         * ~257ms repeating reset loop that never reaches a stable
+         * listening state).
+         */
+        if (fts_gesture_reentry_pending) {
+            fts_gesture_reentry_pending = false;
+            FTS_INFO("DERY_V4_MARKER: expected post-arm sync irq, ignoring");
+            return TOUCH_IGNORE;
+        }
+
         if (ts_data->suspended && ts_data->gesture_support) {
             FTS_INFO("DERY_V2_MARKER: raw retry loop entered");
             for (i = 0; i < 5; i++) {
@@ -876,10 +908,12 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
              * firmware from a known-clean state rather than poking
              * registers on top of whatever state the IC is currently in.
              */
-            if (fts_enter_gesture_fw() < 0)
+            if (fts_enter_gesture_fw() < 0) {
                 FTS_ERROR("DERY_V3_MARKER: hard gesture re-entry failed");
-            else
+            } else {
+                fts_gesture_reentry_pending = true;
                 FTS_INFO("DERY_V3_MARKER: hard reset + gesture re-entry done");
+            }
         }
 
         return TOUCH_FW_INIT;
