@@ -425,6 +425,20 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
         return ret;
     }
 
+    /*
+     * DERY_V2_MARKER: fts_enter_gesture_fw() -> fts_fw_resume() ->
+     * fts_fw_download() already re-enabled the touch IRQ internally
+     * right after the reset+reflash, well before the gesture-mode
+     * registers below are written and verified. Any IRQ landing in
+     * that gap hits a chip that just came out of reset (still
+     * reporting busy on the bus) AND doesn't have gesture mode
+     * configured yet - it can never be recovered no matter how much
+     * the read side retries, and it silently eats whatever tap
+     * triggered it. Mask the IRQ again here and only unmask it once
+     * gesture mode is confirmed enabled below.
+     */
+    fts_irq_disable();
+
     for (i = 0; i < 5; i++) {
         fts_write_reg(0xD1, 0xFF);
         fts_write_reg(0xD2, 0xFF);
@@ -438,6 +452,8 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
         if (state == ENABLE)
             break;
     }
+
+    fts_irq_enable();
 
     if (i >= 5)
         FTS_ERROR("make IC enter into gesture(suspend) fail,state:%x", state);
