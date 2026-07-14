@@ -795,14 +795,18 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
         int i;
 
         if (ts_data->suspended && ts_data->gesture_support) {
+            FTS_INFO("DERY_V2_MARKER: raw retry loop entered");
             for (i = 0; i < 5; i++) {
                 usleep_range(200, 500);
                 ret = fts_read_touchdata(ts_data, touch_buf);
                 if ((ret == 0) &&
                     !((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
-                      && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)))
+                      && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF))) {
+                    FTS_INFO("DERY_V2_MARKER: raw retry recovered tap on attempt %d", i + 1);
                     goto recheck_gesture;
+                }
             }
+            FTS_INFO("DERY_V2_MARKER: raw retry exhausted, still 0xff");
         }
 
         FTS_INFO("touch buff is 0xff, need recovery state");
