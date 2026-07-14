@@ -2272,6 +2272,20 @@ static int fts_ts_suspend(struct device *dev)
 #endif
 
     if (ts_data->gesture_support) {
+        /*
+         * DERY_V2_MARKER: set suspended BEFORE calling
+         * fts_gesture_suspend(), not after. fts_gesture_suspend()
+         * re-enables the touch IRQ partway through its own fw-reflash
+         * sequence (fts_irq_enable()), well before it actually
+         * returns. Any IRQ landing in that window used to see
+         * ts_data->suspended == false, so fts_read_parse_touchdata()
+         * treated a 0xff read as a plain touch failure
+         * (TOUCH_FW_INIT -> fts_tp_state_recovery) instead of routing
+         * it through the suspended+gesture retry/refresh path,
+         * silently eating exactly the tap that would have started a
+         * double-tap-to-wake gesture.
+         */
+        ts_data->suspended = true;
         fts_gesture_suspend(ts_data);
     } else {
 
