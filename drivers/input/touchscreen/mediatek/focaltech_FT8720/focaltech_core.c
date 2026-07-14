@@ -1089,6 +1089,18 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
 static irqreturn_t fts_irq_handler(int irq, void *data)
 {
     struct fts_ts_data *ts_data = fts_data;
+
+    /*
+     * DERY_V3_MARKER: unconditional, first line of the handler - fires
+     * on every hardware edge on the touch INT line, regardless of PM
+     * wait/timeout, proximity short-circuit, or what fts_read_parse_touchdata
+     * later decides about the data. Purely a diagnostic to tell apart
+     * "the IC/GPIO never interrupts again after the first suspend-entry
+     * event" from "it interrupts fine, the data path just drops it".
+     */
+    FTS_INFO("DERY_V3_MARKER: irq entry, suspended=%d, jiffies=%lu",
+             ts_data->suspended, jiffies);
+
 #if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
     int ret = 0;
 
