@@ -1706,13 +1706,28 @@ static int fb_notifier_callback(struct notifier_block *self,
         if (FB_EARLY_EVENT_BLANK == event) {
             FTS_INFO("resume: event = %lu, not care\n", event);
         } else if (FB_EVENT_BLANK == event) {
-            fts_resume();
+            /*
+             * fts_ts_early_suspend()/fts_ts_late_resume() (the
+             * early_suspend framework, registered further down in
+             * this file) already drive fts_ts_suspend()/
+             * fts_ts_resume() for every screen blank/unblank. Having
+             * this fb_notifier path ALSO call fts_resume()/
+             * fts_suspend() double-triggers fts_ts_suspend() for the
+             * same event - one call direct/sync from early_suspend,
+             * one queued from here - racing two register-write
+             * sequences (gesture enable, 0xD1-0xD8...) against each
+             * other on the same bus. That's what was corrupting the
+             * touch report / gesture-enable state and causing
+             * spurious IRQs on suspend. Stock HyperOS keeps this
+             * path disabled for the same reason - match that.
+             */
+            //queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
         }
         break;
     case FB_BLANK_POWERDOWN:
         if (FB_EARLY_EVENT_BLANK == event) {
             cancel_work_sync(&fts_data->resume_work);
-            fts_suspend();
+            // fts_ts_suspend(ts_data->dev); - see note above, disabled to avoid double-triggering fts_ts_suspend()
         } else if (FB_EVENT_BLANK == event) {
             FTS_INFO("suspend: event = %lu, not care\n", event);
         }
