@@ -120,9 +120,27 @@ static void fts_get_request_fw_name(struct fts_upgrade *upg, char *fwname,
 		return;
 	}
 
-	snprintf(fwname, fwname_len, "%s%s.bin",
-		 FTS_FW_NAME_PREX_WITH_REQUEST, upg->module_info->vendor_name);
+	/*
+	 * DERY_V5_MARKER: TEMPORARY DIAGNOSTIC - NOT A REAL FIX.
+	 * The panel actually on this device (dsi_panel_m19a_42_03_0b_...)
+	 * isn't recognized above, so this used to fall through to the
+	 * generic "focaltech_ts_fw_<vendor_name>.bin" name with an empty
+	 * vendor_name (FTS_MODULE_NAME == ""), loading the built-in
+	 * focaltech_ts_fw_.bin blob. That blob is a real, differently
+	 * -tuned firmware image (not empty/corrupt), but we have no way
+	 * to confirm from source whether it's actually correct for panel
+	 * 0b or just a leftover/generic fallback. Forcing panel 0c's known
+	 * firmware here is a one-shot A/B test: if double-tap-to-wake
+	 * suddenly works after this, it proves the firmware content was
+	 * the problem, and the fallback blob is wrong for this panel. If
+	 * it still doesn't work, firmware content is ruled out entirely.
+	 * REVERT this block (delete it) once the test result is known -
+	 * running panel 0b permanently on panel 0c's firmware is only
+	 * safe as a short diagnostic, not a long-term fix.
+	 */
+	snprintf(fwname, fwname_len, "%s", "focaltech_8725_fw.bin");
 }
+
 
 static int fts_check_bootid(void)
 {
