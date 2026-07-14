@@ -821,8 +821,35 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
              */
             if (fts_wait_tp_to_valid() == 0) {
                 ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
-                if ((ret >= 0) && (gesture_en == ENABLE))
-                    return TOUCH_GESTURE;
+                if ((ret >= 0) && (gesture_en == ENABLE)) {
+                    /*
+                     * IC is alive and still in gesture mode, but that
+                     * only proves the FIRMWARE state is fine - it says
+                     * nothing about whether touch_buf itself was ever
+                     * refreshed with real data for this IRQ. On this
+                     * IC (GESTURE_BM_TOUCH), fts_gesture_readdata()
+                     * parses gesture_id/point_num straight out of
+                     * touch_buf, so returning TOUCH_GESTURE here without
+                     * a fresh, successful read means it reports
+                     * whatever stale/garbage bytes are still sitting in
+                     * touch_buf from the failed read above - not an
+                     * actual gesture result. Keep trying to refresh
+                     * touch_buf for real before trusting it.
+                     */
+                    int j;
+
+                    for (j = 0; j < 10; j++) {
+                        msleep(3);
+                        ret = fts_read_touchdata(ts_data, touch_buf);
+                        if ((ret == 0) &&
+                            !((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
+                              && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF))) {
+                            FTS_INFO("DERY_V2_MARKER: post-recovery refresh ok, attempt %d", j + 1);
+                            return TOUCH_GESTURE;
+                        }
+                    }
+                    FTS_INFO("DERY_V2_MARKER: post-recovery refresh failed, no valid gesture data");
+                }
             }
             FTS_DEBUG("gesture not enable in fw after recovery, don't process gesture");
         }
