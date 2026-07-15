@@ -201,9 +201,9 @@ static struct pi_efuse_index pi_efuse_idx[] = {
 /* Global variable for slow idle*/
 unsigned int ptp_data[3] = {0, 0, 0};
 unsigned int gpu_opp0_t_volt[6] = {
-	120000, 120000, 115000, 112000, 107500, 105000
+	115000, 115000, 112500, 110000, 107500, 105000
 };
-unsigned int gpu_vb[3] = {120000, 120000, 120000};
+unsigned int gpu_vb[3] = {115000, 115000, 115000};
 unsigned int gpu_vb_flag;
 unsigned int gpu_vb_volt;
 
