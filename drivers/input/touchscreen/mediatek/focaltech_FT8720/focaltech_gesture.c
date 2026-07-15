@@ -398,8 +398,6 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *touch_buf)
 
 void fts_gesture_recovery(struct fts_ts_data *ts_data)
 {
-    extern bool fts_gesture_reentry_pending; /* DERY_V4_MARKER: see focaltech_core.c */
-
     if (ts_data->gesture_support && ts_data->suspended) {
         FTS_DEBUG("gesture recovery...");
         fts_write_reg(0xD1, 0xFF);
@@ -409,18 +407,11 @@ void fts_gesture_recovery(struct fts_ts_data *ts_data)
         fts_write_reg(0xD7, 0xFF);
         fts_write_reg(0xD8, 0xFF);
         fts_write_reg(FTS_REG_GESTURE_EN, ENABLE);
-        fts_gesture_reentry_pending = true;
     }
 }
 
 int fts_gesture_suspend(struct fts_ts_data *ts_data)
 {
-    /*
-     * DERY_V4_MARKER: defined in focaltech_core.c. Arming gesture mode
-     * always fires one guaranteed spurious sync IRQ shortly after - see
-     * the comment on the definition for the full story.
-     */
-    extern bool fts_gesture_reentry_pending;
     int ret = 0;
     int i = 0;
     u8 state = 0xFF;
@@ -433,20 +424,6 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
         FTS_ERROR("download gesture firmware fail");
         return ret;
     }
-
-    /*
-     * DERY_V2_MARKER: fts_enter_gesture_fw() -> fts_fw_resume() ->
-     * fts_fw_download() already re-enabled the touch IRQ internally
-     * right after the reset+reflash, well before the gesture-mode
-     * registers below are written and verified. Any IRQ landing in
-     * that gap hits a chip that just came out of reset (still
-     * reporting busy on the bus) AND doesn't have gesture mode
-     * configured yet - it can never be recovered no matter how much
-     * the read side retries, and it silently eats whatever tap
-     * triggered it. Mask the IRQ again here and only unmask it once
-     * gesture mode is confirmed enabled below.
-     */
-    fts_irq_disable();
 
     for (i = 0; i < 5; i++) {
         fts_write_reg(0xD1, 0xFF);
@@ -462,14 +439,10 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
             break;
     }
 
-    fts_irq_enable();
-
-    if (i >= 5) {
+    if (i >= 5)
         FTS_ERROR("make IC enter into gesture(suspend) fail,state:%x", state);
-    } else {
-        fts_gesture_reentry_pending = true;
+    else
         FTS_INFO("Enter into gesture(suspend) successfully");
-    }
 
     FTS_FUNC_EXIT();
     return 0;
@@ -477,13 +450,11 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
 
 int fts_gesture_resume(struct fts_ts_data *ts_data)
 {
-    extern bool fts_gesture_reentry_pending; /* DERY_V4_MARKER: see focaltech_core.c */
     int i = 0;
     u8 state = 0xFF;
 
     FTS_FUNC_ENTER();
     fts_enable_irq_wake(false);
-    fts_gesture_reentry_pending = false;
 
     for (i = 0; i < 5; i++) {
         fts_write_reg(FTS_REG_GESTURE_EN, DISABLE);

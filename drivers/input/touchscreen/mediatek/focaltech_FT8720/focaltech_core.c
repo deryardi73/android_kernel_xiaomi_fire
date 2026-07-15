@@ -88,22 +88,6 @@ struct notifier_block fts_psenable_nb;
 struct fts_ts_data *fts_data;
 int tp_sensor_flag;
 bool gesture_support;
-/*
- * DERY_V4_MARKER: set to true the instant gesture mode is (re-)armed
- * (fts_gesture_suspend() in focaltech_gesture.c, and the hard-reset
- * fallback below in fts_read_parse_touchdata()). Field-confirmed: arming
- * gesture mode unconditionally fires exactly one spurious IRQ with an
- * all-0xff report ~10ms later, every single time, unrelated to an actual
- * tap. Treating that expected IRQ as a failure and re-arming gesture mode
- * in response re-triggers the same spurious IRQ, which without this flag
- * caused an infinite ~257ms reset loop that never settles into a state
- * where it can catch a real tap. The first 0xff report seen while this
- * flag is set is swallowed for free (no retry/recovery cost); the flag
- * is then cleared so any 0xff after that point is treated as a real,
- * unexpected failure again.
- */
-bool fts_gesture_reentry_pending;
-
 
 /*****************************************************************************
 * Static function prototypes
@@ -787,159 +771,19 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
     if (ret)
         return TOUCH_IGNORE;
 
-    /*
-     * Check for a corrupted/uninitialized report BEFORE deciding the
-     * gesture is unavailable.
-     *
-     * On this IC family (ids.type 0x87/0x88/<=0x25 -> GESTURE_BM_TOUCH,
-     * see focaltech_gesture.c) the gesture point data is embedded in
-     * THIS SAME touch report buffer - it is not a separate register.
-     * So a 0xFF report during a suspended gesture-wake IRQ doesn't
-     * just mean "the gesture flag is momentarily unreadable" - it
-     * means the one and only copy of the tap that woke us up came
-     * back corrupted in this transaction. Polling something else
-     * afterwards (chip id, GESTURE_EN) can succeed near-instantly
-     * while still telling us nothing about the actual tap, because
-     * that data was never latched anywhere else to re-read.
-     *
-     * The only thing that can still recover the tap itself is
-     * re-issuing the SAME touch data read quickly, before the IC
-     * moves on. Try that first.
-     */
-    if ((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
-        && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)) {
-        int i;
-
-        /*
-         * DERY_V4_MARKER: this is the one expected sync IRQ that always
-         * follows arming gesture mode - not a real dropped tap. Consume
-         * it silently and return immediately, before spending any retry
-         * budget or triggering the hard-reset fallback further down
-         * (which would just re-arm gesture mode and cause this exact
-         * same IRQ again, looping forever - confirmed in the field as a
-         * ~257ms repeating reset loop that never reaches a stable
-         * listening state).
-         */
-        if (fts_gesture_reentry_pending) {
-            fts_gesture_reentry_pending = false;
-            FTS_INFO("DERY_V4_MARKER: expected post-arm sync irq, ignoring");
-            return TOUCH_IGNORE;
-        }
-
-        if (ts_data->suspended && ts_data->gesture_support) {
-            FTS_INFO("DERY_V2_MARKER: raw retry loop entered");
-            for (i = 0; i < 5; i++) {
-                usleep_range(200, 500);
-                ret = fts_read_touchdata(ts_data, touch_buf);
-                if ((ret == 0) &&
-                    !((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
-                      && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF))) {
-                    FTS_INFO("DERY_V2_MARKER: raw retry recovered tap on attempt %d", i + 1);
-                    goto recheck_gesture;
-                }
-            }
-            FTS_INFO("DERY_V2_MARKER: raw retry exhausted, still 0xff");
-        }
-
-        FTS_INFO("touch buff is 0xff, need recovery state");
-
-        if (ts_data->suspended && ts_data->gesture_support) {
-            /*
-             * Raw re-read didn't bring the tap back (IC likely
-             * genuinely reset, not just a bus glitch). Give it the
-             * full recovery budget and check GESTURE_EN so at least
-             * a currently-in-flight second tap / the next one isn't
-             * dropped too, even though this specific tap is gone.
-             */
-            if (fts_wait_tp_to_valid() == 0) {
-                ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
-                if ((ret >= 0) && (gesture_en == ENABLE)) {
-                    /*
-                     * IC is alive and still in gesture mode, but that
-                     * only proves the FIRMWARE state is fine - it says
-                     * nothing about whether touch_buf itself was ever
-                     * refreshed with real data for this IRQ. On this
-                     * IC (GESTURE_BM_TOUCH), fts_gesture_readdata()
-                     * parses gesture_id/point_num straight out of
-                     * touch_buf, so returning TOUCH_GESTURE here without
-                     * a fresh, successful read means it reports
-                     * whatever stale/garbage bytes are still sitting in
-                     * touch_buf from the failed read above - not an
-                     * actual gesture result. Keep trying to refresh
-                     * touch_buf for real before trusting it.
-                     */
-                    int j;
-
-                    for (j = 0; j < 10; j++) {
-                        msleep(3);
-                        ret = fts_read_touchdata(ts_data, touch_buf);
-                        if ((ret == 0) &&
-                            !((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
-                              && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF))) {
-                            FTS_INFO("DERY_V2_MARKER: post-recovery refresh ok, attempt %d", j + 1);
-                            return TOUCH_GESTURE;
-                        }
-                    }
-                    FTS_INFO("DERY_V2_MARKER: post-recovery refresh failed, no valid gesture data");
-                }
-            }
-
-            /*
-             * DERY_V3_MARKER: everything above is soft recovery (register
-             * reads/writes only). Confirmed by field testing that this is
-             * not enough: the IC answers ID reads fine (it is not crashed
-             * into boot ROM - fts_fw_recovery() correctly no-ops on this
-             * path, since its own bootid check comes back "not boot mode"),
-             * yet the touch-report register keeps coming back 0xff across
-             * 15+ retries, and every gesture IRQ for the rest of the
-             * suspend period is silently lost afterwards. That combination
-             * points at the IC's report-ready state - and very possibly
-             * the INT line itself, since the interrupt is falling-edge
-             * triggered and a line stuck low the IC can't reissue - not
-             * getting cleanly reset by register writes alone.
-             *
-             * A full hardware reset + gesture-firmware re-download fixes
-             * both possible causes unconditionally. fts_enter_gesture_fw()
-             * is the same call fts_gesture_suspend() used to enter gesture
-             * mode in the first place - internally it pulses the physical
-             * reset line (need_reset=true down to fts_fw_write_start()),
-             * which forces INT back to its idle level regardless of what
-             * state the IC was stuck in, then reloads and re-arms gesture
-             * firmware from a known-clean state rather than poking
-             * registers on top of whatever state the IC is currently in.
-             */
-            if (fts_enter_gesture_fw() < 0) {
-                FTS_ERROR("DERY_V3_MARKER: hard gesture re-entry failed");
-            } else {
-                fts_gesture_reentry_pending = true;
-                FTS_INFO("DERY_V3_MARKER: hard reset + gesture re-entry done");
-            }
-        }
-
-        return TOUCH_FW_INIT;
-    }
-
-recheck_gesture:
     /*gesture*/
     if (ts_data->suspended && ts_data->gesture_support) {
-        int i;
+        ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
+        if ((ret >= 0) && (gesture_en == ENABLE))
+            return TOUCH_GESTURE;
+        else
+            FTS_DEBUG("gesture not enable in fw, don't process gesture");
+    }
 
-        /*
-         * Fast path: touch buffer looked fine, but the comms bus can
-         * still be briefly unsettled right as the device wakes from
-         * deep suspend via the gesture IRQ, even though the IC is
-         * genuinely still in gesture mode (confirmed moments earlier
-         * in fts_gesture_suspend()). Retry a few times before giving
-         * up, same pattern already used in
-         * fts_gesture_suspend()/resume().
-         */
-        for (i = 0; i < 5; i++) {
-            ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
-            if ((ret >= 0) && (gesture_en == ENABLE))
-                return TOUCH_GESTURE;
-            msleep(5);
-        }
-        FTS_DEBUG("gesture not enable in fw, don't process gesture");
+    if ((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
+        && (touch_buf[3] == 0xFF) && (touch_buf[4] == 0xFF)) {
+        FTS_INFO("touch buff is 0xff, need recovery state");
+        return TOUCH_FW_INIT;
     }
 
     return ((touch_buf[FTS_TOUCH_E_NUM] >> 4) & 0x0F);
@@ -1795,28 +1639,13 @@ static int fb_notifier_callback(struct notifier_block *self,
         if (FB_EARLY_EVENT_BLANK == event) {
             FTS_INFO("resume: event = %lu, not care\n", event);
         } else if (FB_EVENT_BLANK == event) {
-            /*
-             * fts_ts_early_suspend()/fts_ts_late_resume() (the
-             * early_suspend framework, registered further down in
-             * this file) already drive fts_ts_suspend()/
-             * fts_ts_resume() for every screen blank/unblank. Having
-             * this fb_notifier path ALSO call fts_resume()/
-             * fts_suspend() double-triggers fts_ts_suspend() for the
-             * same event - one call direct/sync from early_suspend,
-             * one queued from here - racing two register-write
-             * sequences (gesture enable, 0xD1-0xD8...) against each
-             * other on the same bus. That's what was corrupting the
-             * touch report / gesture-enable state and causing
-             * spurious IRQs on suspend. Stock HyperOS keeps this
-             * path disabled for the same reason - match that.
-             */
             //queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
         }
         break;
     case FB_BLANK_POWERDOWN:
         if (FB_EARLY_EVENT_BLANK == event) {
             cancel_work_sync(&fts_data->resume_work);
-            // fts_ts_suspend(ts_data->dev); - see note above, disabled to avoid double-triggering fts_ts_suspend()
+           // fts_ts_suspend(ts_data->dev);
         } else if (FB_EVENT_BLANK == event) {
             FTS_INFO("suspend: event = %lu, not care\n", event);
         }
@@ -2334,20 +2163,6 @@ static int fts_ts_suspend(struct device *dev)
 #endif
 
     if (ts_data->gesture_support) {
-        /*
-         * DERY_V2_MARKER: set suspended BEFORE calling
-         * fts_gesture_suspend(), not after. fts_gesture_suspend()
-         * re-enables the touch IRQ partway through its own fw-reflash
-         * sequence (fts_irq_enable()), well before it actually
-         * returns. Any IRQ landing in that window used to see
-         * ts_data->suspended == false, so fts_read_parse_touchdata()
-         * treated a 0xff read as a plain touch failure
-         * (TOUCH_FW_INIT -> fts_tp_state_recovery) instead of routing
-         * it through the suspended+gesture retry/refresh path,
-         * silently eating exactly the tap that would have started a
-         * double-tap-to-wake gesture.
-         */
-        ts_data->suspended = true;
         fts_gesture_suspend(ts_data);
     } else {
 
