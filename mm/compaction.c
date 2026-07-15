@@ -1373,7 +1373,25 @@ static bool should_proactive_compact_node(pg_data_t *pgdat)
 {
 	int wmark_high;
 
-	if (!sysctl_compaction_proactiveness || kswapd_is_running(pgdat))
+	if (!sysctl_compaction_proactiveness)
+		return false;
+
+	/*
+	 * Don't gate purely on kswapd_is_running(): with THP enabled,
+	 * kswapd wakes far more often chasing order-HPAGE_PMD_ORDER
+	 * blocks, and a binary "kswapd running -> skip" check starves
+	 * proactive compaction of almost every window on this SoC/RAM
+	 * class (fire/MT6768, 4-8GB variants).
+	 *
+	 * kswapd_failures only increments when a *full* kswapd balance
+	 * pass reclaims nothing (mm/vmscan.c), and resets to 0 the
+	 * moment any reclaim succeeds. It's a relative pressure signal,
+	 * not an absolute free-memory threshold, so it scales the same
+	 * way whether the node has 4GB or 8GB total -- no per-RAM-variant
+	 * tuning needed. Only back off when kswapd is genuinely struggling;
+	 * a transient, successful kswapd wakeup no longer blocks us.
+	 */
+	if (kswapd_is_running(pgdat) && pgdat->kswapd_failures)
 		return false;
 
 	wmark_high = fragmentation_score_wmark(pgdat, false);
