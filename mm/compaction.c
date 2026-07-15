@@ -1315,15 +1315,6 @@ static inline bool is_via_compact_memory(int order)
 	return order == -1;
 }
 
-/*
- * Order used for proactive compaction's fragmentation scoring. This
- * mirrors HPAGE_PMD_ORDER but must not depend on CONFIG_TRANSPARENT_HUGEPAGE,
- * since HPAGE_PMD_SHIFT expands to a deliberate BUILD_BUG() trap when THP
- * is disabled. PMD_SHIFT itself is an architecture-level page table
- * granularity constant, always available regardless of THP config.
- */
-#define COMPACTION_HPAGE_ORDER	(PMD_SHIFT - PAGE_SHIFT)
-
 static bool kswapd_is_running(pg_data_t *pgdat)
 {
 	return pgdat->kswapd && (pgdat->kswapd->state == TASK_RUNNING);
@@ -1344,7 +1335,7 @@ static int fragmentation_score_zone(struct zone *zone)
 	unsigned long score;
 
 	score = zone->present_pages *
-		extfrag_for_order(zone, COMPACTION_HPAGE_ORDER);
+		extfrag_for_order(zone, HPAGE_PMD_ORDER);
 	return div64_ul(score, zone->zone_pgdat->node_present_pages + 1);
 }
 
@@ -1375,7 +1366,7 @@ static int fragmentation_score_wmark(pg_data_t *pgdat, bool low)
 	int wmark_low;
 
 	wmark_low = 100 - sysctl_compaction_proactiveness;
-	return low ? wmark_low : min_t(int, wmark_low + 10, 100);
+	return low ? wmark_low : min(wmark_low + 10, 100);
 }
 
 static bool should_proactive_compact_node(pg_data_t *pgdat)
