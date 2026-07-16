@@ -41,68 +41,68 @@ page_owner=on loop.max_part=7";
 		compatible = "operating-points-v2";
 		opp-shared;
 		opp0 {
+			opp-hz = /bits/ 64 <500000000>;
+			opp-microvolt = <650000>;
+		};
+		opp1 {
+			opp-hz = /bits/ 64 <774000000>;
+			opp-microvolt = <675000>;
+		};
+		opp2 {
 			opp-hz = /bits/ 64 <850000000>;
 			opp-microvolt = <700000>;
 		};
-		opp1 {
+		opp3 {
 			opp-hz = /bits/ 64 <900000000>;
 			opp-microvolt = <718750>;
 		};
-		opp2 {
+		opp4 {
 			opp-hz = /bits/ 64 <950000000>;
 			opp-microvolt = <731250>;
 		};
-		opp3 {
+		opp5 {
 			opp-hz = /bits/ 64 <999000000>;
 			opp-microvolt = <743750>;
 		};
-		opp4 {
+		opp6 {
 			opp-hz = /bits/ 64 <1050000000>;
 			opp-microvolt = <762500>;
 		};
-		opp5 {
+		opp7 {
 			opp-hz = /bits/ 64 <1100000000>;
 			opp-microvolt = <775000>;
 		};
-		opp6 {
+		opp8 {
 			opp-hz = /bits/ 64 <1175000000>;
 			opp-microvolt = <800000>;
 		};
-		opp7 {
+		opp9 {
 			opp-hz = /bits/ 64 <1275000000>;
 			opp-microvolt = <831250>;
 		};
-		opp8 {
+		opp10 {
 			opp-hz = /bits/ 64 <1325000000>;
 			opp-microvolt = <843750>;
 		};
-		opp9 {
+		opp11 {
 			opp-hz = /bits/ 64 <1375000000>;
 			opp-microvolt = <856250>;
 		};
-		opp10 {
+		opp12 {
 			opp-hz = /bits/ 64 <1450000000>;
 			opp-microvolt = <881250>;
 		};
-		opp11 {
+		opp13 {
 			opp-hz = /bits/ 64 <1500000000>;
 			opp-microvolt = <893750>;
 		};
-		opp12 {
+		opp14 {
 			opp-hz = /bits/ 64 <1625000000>;
 			opp-microvolt = <931250>;
 		};
-		opp13 {
-			opp-hz = /bits/ 64 <1800000000>;
-			opp-microvolt = <1006250>;
-		};
-		opp14 {
-			opp-hz = /bits/ 64 <1900000000>;
-			opp-microvolt = <1050000>;
-		};
 		opp15 {
-			opp-hz = /bits/ 64 <2000000000>;
-			opp-microvolt = <1100000>;
+			opp-hz = /bits/ 64 <1700000000>;
+			opp-microvolt = <962500>;
 		};
 	};
 
@@ -110,68 +110,68 @@ page_owner=on loop.max_part=7";
 		compatible = "operating-points-v2";
 		opp-shared;
 		opp0 {
-			opp-hz = /bits/ 64 <998000000>;
-			opp-microvolt = <800000>;
+			opp-hz = /bits/ 64 <850000000>;
+			opp-microvolt = <675000>;
 		};
 		opp1 {
-			opp-hz = /bits/ 64 <1087000000>;
-			opp-microvolt = <843750>;
+			opp-hz = /bits/ 64 <909000000>;
+			opp-microvolt = <700000>;
 		};
 		opp2 {
-			opp-hz = /bits/ 64 <1176000000>;
-			opp-microvolt = <868750>;
+			opp-hz = /bits/ 64 <998000000>;
+			opp-microvolt = <731250>;
 		};
 		opp3 {
-			opp-hz = /bits/ 64 <1295000000>;
-			opp-microvolt = <900000>;
+			opp-hz = /bits/ 64 <1087000000>;
+			opp-microvolt = <768750>;
 		};
 		opp4 {
-			opp-hz = /bits/ 64 <1354000000>;
-			opp-microvolt = <931250>;
+			opp-hz = /bits/ 64 <1176000000>;
+			opp-microvolt = <800000>;
 		};
 		opp5 {
-			opp-hz = /bits/ 64 <1443000000>;
-			opp-microvolt = <968750>;
+			opp-hz = /bits/ 64 <1295000000>;
+			opp-microvolt = <843750>;
 		};
 		opp6 {
-			opp-hz = /bits/ 64 <1532000000>;
-			opp-microvolt = <1000000>;
+			opp-hz = /bits/ 64 <1354000000>;
+			opp-microvolt = <868750>;
 		};
 		opp7 {
-			opp-hz = /bits/ 64 <1621000000>;
-			opp-microvolt = <1031250>;
+			opp-hz = /bits/ 64 <1443000000>;
+			opp-microvolt = <900000>;
 		};
 		opp8 {
-			opp-hz = /bits/ 64 <1710000000>;
-			opp-microvolt = <1050000>;
+			opp-hz = /bits/ 64 <1532000000>;
+			opp-microvolt = <931250>;
 		};
 		opp9 {
-			opp-hz = /bits/ 64 <1800000000>;
-			opp-microvolt = <1062500>;
+			opp-hz = /bits/ 64 <1621000000>;
+			opp-microvolt = <968750>;
 		};
 		opp10 {
-			opp-hz = /bits/ 64 <1900000000>;
-			opp-microvolt = <1075000>;
+			opp-hz = /bits/ 64 <1710000000>;
+			opp-microvolt = <1000000>;
 		};
 		opp11 {
-			opp-hz = /bits/ 64 <2000000000>;
-			opp-microvolt = <1087500>;
+			opp-hz = /bits/ 64 <1800000000>;
+			opp-microvolt = <1031250>;
 		};
 		opp12 {
-			opp-hz = /bits/ 64 <2100000000>;
-			opp-microvolt = <1100000>;
+			opp-hz = /bits/ 64 <1850000000>;
+			opp-microvolt = <1050000>;
 		};
 		opp13 {
-			opp-hz = /bits/ 64 <2200000000>;
-			opp-microvolt = <1112500>;
+			opp-hz = /bits/ 64 <1900000000>;
+			opp-microvolt = <1062500>;
 		};
 		opp14 {
-			opp-hz = /bits/ 64 <2300000000>;
-			opp-microvolt = <1125000>;
+			opp-hz = /bits/ 64 <1950000000>;
+			opp-microvolt = <1075000>;
 		};
 		opp15 {
-			opp-hz = /bits/ 64 <2400000000>;
-			opp-microvolt = <1137500>;
+			opp-hz = /bits/ 64 <2000000000>;
+			opp-microvolt = <1087500>;
 		};
 	};
 
@@ -185,7 +185,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a55";
 			reg = <0x0000>;
 			enable-method = "psci";
-			clock-frequency = <2000000000>;
+			clock-frequency = <1701000000>;
 			operating-points-v2 = <&cluster0_opp>;
 			dynamic-power-coefficient = <85>;
 			capacity-dmips-mhz = <495>;
@@ -198,7 +198,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a55";
 			reg = <0x0100>;
 			enable-method = "psci";
-			clock-frequency = <2000000000>;
+			clock-frequency = <1701000000>;
 			operating-points-v2 = <&cluster0_opp>;
 			dynamic-power-coefficient = <85>;
 			capacity-dmips-mhz = <495>;
@@ -211,7 +211,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a55";
 			reg = <0x0200>;
 			enable-method = "psci";
-			clock-frequency = <2000000000>;
+			clock-frequency = <1701000000>;
 			operating-points-v2 = <&cluster0_opp>;
 			dynamic-power-coefficient = <85>;
 			capacity-dmips-mhz = <495>;
@@ -224,7 +224,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a55";
 			reg = <0x0300>;
 			enable-method = "psci";
-			clock-frequency = <2000000000>;
+			clock-frequency = <1701000000>;
 			operating-points-v2 = <&cluster0_opp>;
 			dynamic-power-coefficient = <85>;
 			capacity-dmips-mhz = <495>;
@@ -237,7 +237,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a55";
 			reg = <0x0400>;
 			enable-method = "psci";
-			clock-frequency = <2000000000>;
+			clock-frequency = <1701000000>;
 			operating-points-v2 = <&cluster0_opp>;
 			dynamic-power-coefficient = <85>;
 			capacity-dmips-mhz = <495>;
@@ -250,7 +250,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a55";
 			reg = <0x0500>;
 			enable-method = "psci";
-			clock-frequency = <2000000000>;
+			clock-frequency = <1701000000>;
 			operating-points-v2 = <&cluster0_opp>;
 			dynamic-power-coefficient = <85>;
 			capacity-dmips-mhz = <495>;
@@ -263,7 +263,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a75";
 			reg = <0x0600>;
 			enable-method = "psci";
-			clock-frequency = <2400000000>;
+			clock-frequency = <2171000000>;
 			operating-points-v2 = <&cluster1_opp>;
 			dynamic-power-coefficient = <275>;
 			capacity-dmips-mhz = <1024>;
@@ -276,7 +276,7 @@ page_owner=on loop.max_part=7";
 			compatible = "arm,cortex-a75";
 			reg = <0x0700>;
 			enable-method = "psci";
-			clock-frequency = <2400000000>;
+			clock-frequency = <2171000000>;
 			operating-points-v2 = <&cluster1_opp>;
 			dynamic-power-coefficient = <275>;
 			capacity-dmips-mhz = <1024>;
@@ -3828,7 +3828,7 @@ defined(CONFIG_MTK_CAM_SECURITY_SUPPORT)
 		/* dynamic mivr */
 		min_charger_voltage_1 = <4400000>;
 		min_charger_voltage_2 = <4200000>;
-		max_dmivr_charger_current = <2500000>;
+		max_dmivr_charger_current = <1400000>;
 
 		/* charging current */
 		usb_charger_current_suspend = <0>;
@@ -3892,7 +3892,7 @@ defined(CONFIG_MTK_CAM_SECURITY_SUPPORT)
 		/* PE 2.0 */
 		pe20_ichg_level_threshold = <1000000>; /* uA */
 		ta_start_battery_soc = <0>;
-		ta_stop_battery_soc = <95>;
+		ta_stop_battery_soc = <85>;
 
 		/* PE 4.0 */
 		high_temp_to_leave_pe40 = <46>;
@@ -3908,7 +3908,7 @@ defined(CONFIG_MTK_CAM_SECURITY_SUPPORT)
 		pe40_dual_charger_input_current = <3000000>;
 		pe40_dual_charger_chg1_current = <2000000>;
 		pe40_dual_charger_chg2_current = <2000000>;
-		pe40_stop_battery_soc = <95>;
+		pe40_stop_battery_soc = <80>;
 
 		/* PE 4.0 cable impedance (mohm) */
 		pe40_r_cable_1a_lower = <518>;
@@ -3934,7 +3934,7 @@ defined(CONFIG_MTK_CAM_SECURITY_SUPPORT)
 		pd_vbus_low_bound = <5000000>;
 		pd_vbus_upper_bound = <9000000>;
 		pd_ichg_level_threshold = <1000000>; /* uA */
-		pd_stop_battery_soc = <95>;
+		pd_stop_battery_soc = <80>;
 
 		ibus_err = <14>;
 		vsys_watt = <5000000>;
