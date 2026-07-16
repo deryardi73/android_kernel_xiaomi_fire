@@ -299,6 +299,20 @@ static void swchg_select_charging_current_limit(struct charger_manager *info)
 					pdata->thermal_input_current_limit;
 	}
 
+	/*
+	 * mi_thermald (userspace thermal HAL) drives info->thermal_mitigation_current
+	 * via charger_manager_set_prop_system_temp_level() -> thermal_mitigation[level],
+	 * independent of the JEITA check above (which already ran and reflects real
+	 * battery-temperature protection). Floor it at 2.5A so the userspace system
+	 * temp level policy can't pull charging current below 2.5A, without touching
+	 * whatever JEITA already decided. If JEITA has already limited
+	 * charging_current_limit below 2.5A due to actual battery heat, the min()
+	 * below still respects that -- this floor only neutralizes mi_thermald's
+	 * own throttle steps, not the hardware/battery-temp safety path.
+	 */
+	if (info->thermal_mitigation_current < 2500000)
+		info->thermal_mitigation_current = 2500000;
+
 	pdata->charging_current_limit = min(pdata->charging_current_limit,info->thermal_mitigation_current);
 
 	if (pdata->input_current_limit_by_aicl != -1 &&
@@ -806,6 +820,15 @@ static int select_pdc_charging_current_limit(struct charger_manager *info)
 			pdata->input_current_limit =
 					pdata->thermal_input_current_limit;
 	}
+
+	/*
+	 * Same 2.5A floor as swchg_select_charging_current_limit() -- see
+	 * comment there. Applies to the PD/PPS negotiated path too, so the
+	 * floor is consistent regardless of which charging protocol won
+	 * negotiation.
+	 */
+	if (info->thermal_mitigation_current < 2500000)
+		info->thermal_mitigation_current = 2500000;
 
 	pdata->charging_current_limit = min(pdata->charging_current_limit,info->thermal_mitigation_current);
 
