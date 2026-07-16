@@ -34,30 +34,6 @@
 #include "mtk_eem.h"
 
 /*
- * Weak fallbacks: this file is built unconditionally via
- * obj-$(CONFIG_MACH_MT6768), independent of CONFIG_MTK_PTPOD. The real
- * implementations only exist in eem_v2/mt6768/mtk_eem.c, which disappears
- * entirely from the build when CONFIG_MTK_PTPOD=n (see
- * drivers/misc/mediatek/base/power/Makefile: obj-$(CONFIG_MTK_PTPOD) +=
- * eem_v2/). Without these stubs, picachu_init() leaves undefined symbols
- * at link time whenever PTPOD is disabled. Mirrors the existing weak-stub
- * pattern already used for mt_ptp_lock/mt_ptp_unlock in
- * drivers/misc/mediatek/thermal/mt6768/src/mtk_tc.c.
- */
-void __attribute__((weak))
-eem_set_pi_efuse(enum eem_det_id id, unsigned int pi_efuse,
-		unsigned int loo_enabled)
-{
-	pr_notice("[Picachu] %s doesn't exist\n", __func__);
-}
-
-void __attribute__((weak))
-eem_set_pi_dvtfixed(enum eem_det_id id, unsigned int pi_dvtfixed)
-{
-	pr_notice("[Picachu] %s doesn't exist\n", __func__);
-}
-
-/*
  * Little cluster: L = 2, CCI = 2
  * Big cluster: Big = 2
  */

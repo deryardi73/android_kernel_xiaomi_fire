@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2017 MediaTek Inc.
+ * Copyright (C) 2016 MediaTek Inc.
  */
 
 #include <linux/kernel.h>
@@ -17,84 +17,38 @@
 #include <linux/seq_file.h>
 #include <linux/sched.h>
 #include <linux/types.h>
-#include <mt-plat/mtk_chip.h>
+#include <linux/cpufreq.h>
+#include <linux/pm_opp.h>
+//#include <mt-plat/mtk_chip.h>
+#include <linux/energy_model.h>
 #include <linux/delay.h>
 #include <linux/math64.h>
 
 /* local include */
-#include "mtk_upower.h"
-
+#include "mtk_common_upower.h"
 /*
- * Weak fallback: upower_v2 is compiled independently of CONFIG_MTK_PTPOD,
- * but mt_eem_is_enabled() only exists in eem_v2/mt6768/mtk_eem.c, which
- * disappears from the build when CONFIG_MTK_PTPOD=n. eem_is_enabled()
- * below calls mt_eem_is_enabled() UNCONDITIONALLY (not gated by
- * UPOWER_NUM_LARGER), so this stub must live outside that ifdef too --
- * previously it was nested inside #ifdef UPOWER_NUM_LARGER alongside the
- * mtk_eem.h include, which meant it silently compiled out whenever
- * UPOWER_NUM_LARGER was undefined, leaving the unconditional call site
- * with nothing to link against. Declared here with its own prototype so
- * it doesn't depend on mtk_eem.h being included in this build. Mirrors
- * the existing weak-stub pattern used for mt_ptp_lock/mt_ptp_unlock in
- * drivers/misc/mediatek/thermal/mt6768/src/mtk_tc.c.
+ * #ifdef UPOWER_NUM_LARGER
+ * #include "mtk_eem.h"
+ * #endif
  */
-extern unsigned int mt_eem_is_enabled(void);
-unsigned int __attribute__((weak))
-mt_eem_is_enabled(void)
-{
-	pr_notice("[upower] %s doesn't exist\n", __func__);
-	return 0;
-}
-
-#ifdef UPOWER_NUM_LARGER
-#include "mtk_eem.h"
-#endif
 
 #if UPOWER_ENABLE_TINYSYS_SSPM
-#if defined(CONFIG_MACH_MT6768)
 #include <sspm_reservedmem_define.h>
-#else
-#include <sspm_reservedmem_define_mt6779.h>
-#endif
 #endif
 
 #ifndef EARLY_PORTING_SPOWER
-#include "mtk_common_static_power.h"
-#endif
-#ifdef CONFIG_MTK_STATIC_POWER
-#include <mtk_common_static_power.h>
+#include "mtk_common_spower.h"
 #endif
 
 #ifdef UPOWER_USE_QOS_IPI
 #if UPOWER_ENABLE_TINYSYS_SSPM
 //#include <mtk_spm_vcore_dvfs_ipi.h>
-//#include <mtk_vcorefs_governor.h>
-//#include <helio-dvfsrc-ipi.h>
-#include <sspm_ipi.h>
-
-enum {
-	QOS_IPI_UPOWER_DATA_TRANSFER,
-	QOS_IPI_UPOWER_DUMP_TABLE,
-};
-
-struct upower_ipi_data {
-	unsigned int cmd;
-	struct {
-		unsigned int arg[3];
-	} upower_data;
-};
-
-static int upower_qos_ipi_to_sspm(void *buffer, int slot)
-{
-	int ack_data = 0;
-
-#if defined(CONFIG_MTK_TINYSYS_SSPM_SUPPORT)
-	return sspm_ipi_send_sync(IPI_ID_QOS, IPI_OPT_POLLING,
-				buffer, slot, &ack_data, 1);
+#include <mtk_vcorefs_governor.h>
+#ifdef CONFIG_MTK_QOS_FRAMEWORK
+#include <mtk_qos_ipi.h>
 #else
-	return ack_data;
+#include <helio-dvfsrc-ipi.h>
 #endif
-}
 #endif
 #endif
 
@@ -107,12 +61,15 @@ unsigned char upower_enable;
 int iter;
 #endif
 
+
 /* for log print */
 #define LOG_BUF_LEN 1024
 #define LL_CORE_NUM 4
 #define L_CORE_NUM 2
 #define LKG_IDX 0
 #define UPOWER_UT
+/* charles add */
+#define EEM_DISABLE 1
 struct mtk_upower_buf {
 	char buf[LOG_BUF_LEN];
 	char *p_idx;
@@ -134,6 +91,35 @@ struct upower_tbl_info *upower_tbl_infos;
 phys_addr_t upower_data_phy_addr, upower_data_virt_addr;
 unsigned long long upower_data_size;
 
+#ifdef ENABLE_UPOWER_LOG
+static void print_tbl(void)
+{
+	int i, j;
+/* --------------------print static orig table -------------------------*/
+/* --------------------print sram table -------------------------*/
+	for (i = 0; i < NR_UPOWER_BANK; i++) {
+		/* table size must be 512 bytes */
+		upower_debug("---Bank %d , tbl size %ld---\n",
+			i, sizeof(struct upower_tbl));
+		for (j = 0; j < UPOWER_OPP_NUM; j++) {
+			upower_debug(" cap = %llu, volt = %u, dyn = %u, lkg = {%u, %u, %u, %u, %u}\n",
+				upower_tbl_ref[i].row[j].cap,
+				upower_tbl_ref[i].row[j].volt,
+				upower_tbl_ref[i].row[j].dyn_pwr,
+				upower_tbl_ref[i].row[j].lkg_pwr[0],
+				upower_tbl_ref[i].row[j].lkg_pwr[1],
+				upower_tbl_ref[i].row[j].lkg_pwr[2],
+				upower_tbl_ref[i].row[j].lkg_pwr[3],
+				upower_tbl_ref[i].row[j].lkg_pwr[4]);
+		}
+		upower_debug(" lkg_idx, num_row: %d, %d\n",
+			upower_tbl_ref[i].lkg_idx,
+			upower_tbl_ref[i].row_num);
+		upower_debug("-------------------------------------------------\n");
+	}
+}
+#endif
+
 #ifdef UPOWER_UT
 void upower_ut(void)
 {
@@ -149,6 +135,11 @@ void upower_ut(void)
 	ptr_tbl_info = *addr_ptr_tbl_info;
 	upower_debug("get upower tbl location = %p\n",
 			ptr_tbl_info[0].p_upower_tbl);
+#ifdef ENABLE_UPOWER_LOG
+	upower_debug("ptr_tbl_info --> %p --> tbl %p (p_upower_tbl_infos --> %p)\n",
+				ptr_tbl_info, ptr_tbl_info[0].p_upower_tbl,
+				p_upower_tbl_infos);
+#endif
 
 	/* print all the tables that record in upower_tbl_infos[]*/
 	for (i = 0; i < NR_UPOWER_BANK; i++) {
@@ -287,6 +278,7 @@ static void upower_get_c_state_lkg(unsigned int bank,
 		}
 	}
 }
+
 static void upower_update_lkg_pwr(void)
 {
 	int i;
@@ -363,7 +355,11 @@ static void upower_init_rownum(void)
 static unsigned int eem_is_enabled(void)
 {
 /* #ifndef EARLY_PORTING_EEM */
+#ifndef EEM_DISABLE
 	return mt_eem_is_enabled();
+#else
+	return 0;
+#endif
 }
 
 static void upower_wait_for_eem_volt_done(void)
@@ -507,54 +503,8 @@ static int upower_update_tbl_ref(void)
 	return ret;
 }
 
-#if defined(CONFIG_MACH_MT6893)
-static void get_pwr_efficiency(void)
-{
-#ifndef DISABLE_TP
-	int i, j;
-	unsigned int max = 0;
-	unsigned int min = ~0U;
-	unsigned long long sum;
-	struct upower_tbl *tbl;
-
-	for (j = 0; j < NR_UPOWER_BANK - 1; j++) {
-		max = 0;
-		min = ~0U;
-		sum = 0;
-		for (i = 0; i < UPOWER_OPP_NUM; i++) {
-			tbl = &upower_tbl_ref[j];
-			sum = (unsigned long long)(tbl->row[i].lkg_pwr[LKG_IDX]
-						   + tbl->row[i].dyn_pwr);
-#if defined(__LP64__) || defined(_LP64)
-			tbl->row[i].pwr_efficiency =
-				sum / (unsigned long long)tbl->row[i].cap;
-#else
-			tbl->row[i].pwr_efficiency =
-				div64_u64(sum,
-					  (unsigned long long)tbl->row[i].cap);
-#endif
-			upower_debug("[%d] eff = %d dyn = %d lkg = %d cap = %d\n",
-				     i, tbl->row[i].pwr_efficiency,
-				     tbl->row[i].dyn_pwr,
-				     tbl->row[i].lkg_pwr[LKG_IDX],
-				     tbl->row[i].cap
-				    );
-			if (tbl->row[i].pwr_efficiency > max)
-				max = tbl->row[i].pwr_efficiency;
-			if (tbl->row[i].pwr_efficiency < min)
-				min = tbl->row[i].pwr_efficiency;
-		}
-		tbl->max_efficiency = max;
-		tbl->min_efficiency = min;
-	}
-#endif
-}
-
-#else
-
 static void get_L_pwr_efficiency(void)
 {
-#ifndef DISABLE_TP
 	int i;
 	unsigned int max = 0;
 	unsigned int min = ~0U;
@@ -589,13 +539,10 @@ static void get_L_pwr_efficiency(void)
 
 	tbl->max_efficiency = max;
 	tbl->min_efficiency = min;
-#endif
 }
 
 static void get_LL_pwr_efficiency(void)
 {
-
-#ifndef DISABLE_TP
 	int i;
 	unsigned int max = 0;
 	unsigned int min = ~0U;
@@ -608,14 +555,8 @@ static void get_LL_pwr_efficiency(void)
 	for (i = 0; i < UPOWER_OPP_NUM; i++) {
 		LL_pwr = (unsigned long long)(tbl->row[i].lkg_pwr[LKG_IDX] +
 				tbl->row[i].dyn_pwr);
-#if defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6873) \
-	|| defined(CONFIG_MACH_MT6853) || defined(CONFIG_MACH_MT6893) \
-	|| defined(CONFIG_MACH_MT6833) || defined(CONFIG_MACH_MT6877)
-		CCI_pwr = 0;
-#else
 		CCI_pwr = (unsigned long long)(ctbl->row[i].lkg_pwr[LKG_IDX] +
 				ctbl->row[i].dyn_pwr);
-#endif
 		sum = (unsigned long long)LL_CORE_NUM * LL_pwr + CCI_pwr;
 #if defined(__LP64__) || defined(_LP64)
 		tbl->row[i].pwr_efficiency =
@@ -642,14 +583,10 @@ static void get_LL_pwr_efficiency(void)
 
 	tbl->max_efficiency = max;
 	tbl->min_efficiency = min;
-#endif
 }
-#endif
-
 static int upower_cal_turn_point(void)
 {
 	int i;
-#ifndef DISABLE_TP
 	struct upower_tbl *L_tbl, *LL_tbl;
 	int tempLL;
 	int find_flag = 0;
@@ -674,9 +611,9 @@ static int upower_cal_turn_point(void)
 		LL_tbl->turn_point = UPOWER_OPP_NUM;
 		i = UPOWER_OPP_NUM;
 	}
-#else
-	i = -1;
-#endif
+
+	L_tbl->turn_point = 13;
+	LL_tbl->turn_point = 13;
 	return i;
 
 }
@@ -685,20 +622,20 @@ static int upower_cal_turn_point(void)
 #if UPOWER_ENABLE_TINYSYS_SSPM
 void upower_send_data_ipi(phys_addr_t phy_addr, unsigned long long size)
 {
-	struct upower_ipi_data qos_d;
+	struct qos_ipi_data qos_d;
 
 	qos_d.cmd = QOS_IPI_UPOWER_DATA_TRANSFER;
-	qos_d.upower_data.arg[0] = phy_addr;
-	qos_d.upower_data.arg[1] = size;
-	upower_qos_ipi_to_sspm(&qos_d, 3);
+	qos_d.u.upower_data.arg[0] = phy_addr;
+	qos_d.u.upower_data.arg[1] = size;
+	qos_ipi_to_sspm_command(&qos_d, 3);
 }
 
 void upower_dump_data_ipi(void)
 {
-	struct upower_ipi_data qos_d;
+	struct qos_ipi_data qos_d;
 
 	qos_d.cmd = QOS_IPI_UPOWER_DUMP_TABLE;
-	upower_qos_ipi_to_sspm(&qos_d, 1);
+	qos_ipi_to_sspm_command(&qos_d, 1);
 }
 #endif
 #endif
@@ -789,7 +726,7 @@ static int upower_debug_proc_show(struct seq_file *m, void *v)
 		seq_printf(m, "%s\n", upower_tbl_infos[i].name);
 		ptr_tbl = ptr_tbl_info[i].p_upower_tbl;
 		for (j = 0; j < UPOWER_OPP_NUM; j++) {
-			seq_printf(m, " cap = %llu, volt = %u, dyn = %u,",
+			seq_printf(m, " cap = %lu, volt = %u, dyn = %u,",
 					ptr_tbl->row[j].cap,
 					ptr_tbl->row[j].volt,
 					ptr_tbl->row[j].dyn_pwr);
@@ -881,9 +818,8 @@ static int create_procfs(void)
 			0644,
 			upower_dir,
 			upower_entries[i].fops)) {
-			upower_error(
-			"[%s]: create /proc/upower/%s failed\n",
-			__func__,
+			upower_error("[%s]: create /proc/upower/%s failed\n",
+					__func__,
 			upower_entries[i].name);
 			return -3;
 		}
@@ -891,9 +827,32 @@ static int create_procfs(void)
 	return 0;
 }
 
+void upower_register_perf_domain(void)
+{
+	int retv;
+	int cpu = 0;
+	struct cpufreq_policy *policy;
+	struct em_data_callback em_cb = EM_DATA_CB(of_dev_pm_opp_get_cpu_power);
+
+	for_each_possible_cpu(cpu) {
+		policy = cpufreq_cpu_get(cpu);
+		if (!policy) {
+			pr_notice("cpu %d get policy fail\n", cpu);
+			return;
+		}
+		retv = em_register_perf_domain(policy->cpus,
+				UPOWER_OPP_NUM, &em_cb);
+		cpufreq_cpu_put(policy);
+	}
+}
+
 static int __init upower_init(void)
 {
 	int turn;
+	/* charles modify */
+	/* int cpu; */
+	struct upower_tbl_info **addr_ptr_tbl_info;
+	struct upower_tbl_info *ptr_tbl_info;
 #ifdef UPOWER_NOT_READY
 	return 0;
 #endif
@@ -930,20 +889,27 @@ static int __init upower_init(void)
 	}
 	upower_update_dyn_pwr();
 	upower_update_lkg_pwr();
-#if defined(CONFIG_MACH_MT6893)
-	get_pwr_efficiency();
-#else
 	get_L_pwr_efficiency();
 	get_LL_pwr_efficiency();
-#endif
 	turn = upower_cal_turn_point();
-	/* set_sched_turn_point_cap(); */
+	upower_register_perf_domain();
+
 	upower_debug("@@~turn point is %d\n", turn);
 #ifdef UPOWER_L_PLUS
 	upower_update_L_plus_cap();
 	upower_update_L_plus_lkg_pwr();
 #endif
 	upower_update_tbl_ref();
+
+	upower_debug("----upower_get_tbl()----\n");
+	/* get addr of ptr which points to upower_tbl_infos[] */
+	addr_ptr_tbl_info = upower_get_tbl();
+	/* get ptr which points to upower_tbl_infos[] */
+	ptr_tbl_info = *addr_ptr_tbl_info;
+	/*
+	 * for_each_possible_cpu(cpu)
+	 *	init_cpu_capacity(cpu);
+	 */
 
 #ifdef UPOWER_UT
 	upower_debug("--------- (UT)tbl ready--------------\n");
@@ -960,7 +926,7 @@ static int __init upower_init(void)
 	return 0;
 }
 #ifdef __KERNEL__
-module_init(upower_get_tbl_ref);
+subsys_initcall(upower_get_tbl_ref);
 late_initcall(upower_init);
 #endif
 MODULE_DESCRIPTION("MediaTek Unified Power Driver v1.0");
