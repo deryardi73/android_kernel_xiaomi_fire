@@ -671,16 +671,20 @@ static int mtk_sdio_pm_suspend(struct device *pDev)
 			"%s: cannot remain alive(0x%X)\n", func_id, pm_caps);
 	}
 
-	/* If wow enable, ask kernel accept SDIO IRQ in suspend mode */
-	if (prAdapter->rWifiVar.ucWow &&
-		prAdapter->rWowCtrl.fgWowEnable) {
-		set_flag = MMC_PM_WAKE_SDIO_IRQ;
-		ret = sdio_set_host_pm_flags(func, set_flag);
-		if (ret) {
-			DBGLOG(HAL, ERROR, "set flag %d err %d\n", set_flag, ret);
-			DBGLOG(HAL, ERROR,
-				"%s: cannot sdio wake-irq(0x%X)\n", func_id, pm_caps);
-		}
+	/* Ask kernel accept SDIO IRQ in suspend mode. This must NOT be
+	 * gated behind full WoW (ucWow/fgWowEnable), since WoW controls
+	 * pattern-match wake filtering, while this flag only keeps the
+	 * SDIO IRQ line itself alive as a wake source. Without it, the
+	 * host clock gets gated on suspend (see msdc_runtime_suspend in
+	 * mtk-sd.c) and the chip has no path to wake the host, so WiFi
+	 * appears dead until the next user-triggered full resume.
+	 */
+	set_flag = MMC_PM_WAKE_SDIO_IRQ;
+	ret = sdio_set_host_pm_flags(func, set_flag);
+	if (ret) {
+		DBGLOG(HAL, ERROR, "set flag %d err %d\n", set_flag, ret);
+		DBGLOG(HAL, ERROR,
+			"%s: cannot sdio wake-irq(0x%X)\n", func_id, pm_caps);
 	}
 
 	glSdioSetState(&prGlueInfo->rHifInfo, SDIO_STATE_SUSPEND);
@@ -2124,4 +2128,3 @@ void kalRemoveProbe(IN struct GLUE_INFO *prGlueInfo)
 
 }
 #endif
-
