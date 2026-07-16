@@ -25,6 +25,22 @@
 #include "mtk_upower.h"
 #ifdef UPOWER_NUM_LARGER
 #include "mtk_eem.h"
+
+/*
+ * Weak fallback: upower_v2 is compiled independently of CONFIG_MTK_PTPOD,
+ * but mt_eem_is_enabled() only exists in eem_v2/mt6768/mtk_eem.c, which
+ * disappears from the build when CONFIG_MTK_PTPOD=n. Without this stub,
+ * upower_init() -> upower_init_rownum() leaves an undefined symbol at
+ * link time whenever PTPOD is disabled. Mirrors the existing weak-stub
+ * pattern already used for mt_ptp_lock/mt_ptp_unlock in
+ * drivers/misc/mediatek/thermal/mt6768/src/mtk_tc.c.
+ */
+unsigned int __attribute__((weak))
+mt_eem_is_enabled(void)
+{
+	pr_notice("[upower] %s doesn't exist\n", __func__);
+	return 0;
+}
 #endif
 
 #if UPOWER_ENABLE_TINYSYS_SSPM
