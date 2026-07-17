@@ -62,6 +62,7 @@
 #define SYNC_TIME_CYCLC 1000
 #define SYNC_TIME_START_CYCLC 3000
 #define SCP_sensorHub_DEV_NAME "SCP_sensorHub"
+#define FUSION_SENSOR_MIN_SAMPLING_PERIOD_NS 100000000LL
 
 #define CHRE_POWER_RESET_NOTIFY
 
@@ -954,6 +955,31 @@ static void init_sensor_config_cmd(struct ConfigCmd *cmd,
 	}
 }
 
+static bool is_rate_limited_fusion_sensor(int handle)
+{
+	switch (handle) {
+	case ID_GRAVITY:
+	case ID_LINEAR_ACCELERATION:
+	case ID_ROTATION_VECTOR:
+	case ID_GAME_ROTATION_VECTOR:
+	case ID_GEOMAGNETIC_ROTATION_VECTOR:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static long long limit_fusion_sensor_sampling_period(int handle,
+	long long samplingPeriodNs)
+{
+	if (samplingPeriodNs >= 0 &&
+	    samplingPeriodNs < FUSION_SENSOR_MIN_SAMPLING_PERIOD_NS &&
+	    is_rate_limited_fusion_sensor(handle))
+		return FUSION_SENSOR_MIN_SAMPLING_PERIOD_NS;
+
+	return samplingPeriodNs;
+}
+
 static int SCP_sensorHub_batch(int handle, int flag,
 	long long samplingPeriodNs, long long maxBatchReportLatencyNs)
 {
@@ -963,6 +989,8 @@ static int SCP_sensorHub_batch(int handle, int flag,
 	uint64_t rate = 1024000000000ULL;
 
 	if (mSensorState[sensor_type].sensorType) {
+		samplingPeriodNs = limit_fusion_sensor_sampling_period(handle,
+			samplingPeriodNs);
 		if (samplingPeriodNs > 0 && mSensorState[sensor_type].rate !=
 			SENSOR_RATE_ONCHANGE &&
 			mSensorState[sensor_type].rate != SENSOR_RATE_ONESHOT) {
