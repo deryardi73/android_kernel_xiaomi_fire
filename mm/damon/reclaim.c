@@ -124,7 +124,7 @@ module_param(wmarks_low, ulong, 0600);
  * The sampling interval of DAMON for the cold memory monitoring.  Please refer
  * to the DAMON documentation for more detail.  5 ms by default.
  */
-static unsigned long sample_interval __read_mostly = 5000;
+static unsigned long sample_interval __read_mostly = 15000;
 module_param(sample_interval, ulong, 0600);
 
 /*
@@ -133,7 +133,7 @@ module_param(sample_interval, ulong, 0600);
  * The aggregation interval of DAMON for the cold memory monitoring.  Please
  * refer to the DAMON documentation for more detail.  100 ms by default.
  */
-static unsigned long aggr_interval __read_mostly = 100000;
+static unsigned long aggr_interval __read_mostly = 300000;
 module_param(aggr_interval, ulong, 0600);
 
 /*
@@ -155,7 +155,7 @@ module_param(min_nr_regions, ulong, 0600);
  * However, setting this too low could result in bad monitoring quality.
  * Please refer to the DAMON documentation for more detail.  1000 by default.
  */
-static unsigned long max_nr_regions __read_mostly = 1000;
+static unsigned long max_nr_regions __read_mostly = 200;
 module_param(max_nr_regions, ulong, 0600);
 
 /*
