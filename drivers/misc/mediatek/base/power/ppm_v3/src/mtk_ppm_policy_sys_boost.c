@@ -545,7 +545,9 @@ static void ppm_sysboost_auto_release_work(struct work_struct *work)
 
 		for_each_ppm_clusters(i) {
 			if (data->limit[i].min_freq_idx != -1
-				|| data->limit[i].min_core_num != -1) {
+				|| data->limit[i].max_freq_idx != -1
+				|| data->limit[i].min_core_num != -1
+				|| data->limit[i].max_core_num != -1) {
 				has_limit = true;
 				break;
 			}
