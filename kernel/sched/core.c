@@ -1410,12 +1410,15 @@ long schedtune_task_margin(struct task_struct *task);
 #endif
 unsigned int uclamp_task(struct task_struct *p)
 {
-	unsigned long util;
+	unsigned long util = task_util_est(p);
 
 #ifdef CONFIG_SCHED_TUNE
-	util += schedtune_task_margin(p);
+	long margin = schedtune_task_margin(p);
+
+	trace_sched_boost_task(p, util, margin);
+
+	util += margin;
 #endif
-	util = task_util_est(p);
 	util = max(util, uclamp_eff_value(p, UCLAMP_MIN));
 	util = min(util, uclamp_eff_value(p, UCLAMP_MAX));
 
