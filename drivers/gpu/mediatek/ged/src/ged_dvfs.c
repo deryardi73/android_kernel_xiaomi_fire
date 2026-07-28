@@ -592,25 +592,6 @@ bool ged_dvfs_gpu_freq_commit(unsigned long ui32NewFreqID,
 				5566, 0, 0);
 		}
 
-		/* up bound */
-		if (ui32NewFreqID < g_cust_upbound_freq_id) {
-			ui32NewFreqID = g_cust_upbound_freq_id;
-			g_CommitType = MTK_GPU_DVFS_TYPE_CUSTOMIZATION;
-			ged_log_perf_trace_counter("gpu_cust_ceiling",
-				(long long)g_cust_upbound_freq_id,
-				5566, 0, 0);
-		}
-
-		/* thermal power limit */
-		if (ui32NewFreqID < mt_gpufreq_get_thermal_limit_index()) {
-			ui32NewFreqID = mt_gpufreq_get_thermal_limit_index();
-			g_CommitType = MTK_GPU_DVFS_TYPE_THERMAL;
-			ged_log_perf_trace_counter("gpu_limit_idx",
-				(long long)
-				mt_gpufreq_get_thermal_limit_index(),
-				5566, 0, 0);
-		}
-
 		g_ulCommitFreq = mt_gpufreq_get_freq_by_idx(ui32NewFreqID);
 
 #ifdef GED_DVFS_STRESS_TEST
