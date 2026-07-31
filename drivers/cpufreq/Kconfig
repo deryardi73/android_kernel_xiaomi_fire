@@ -235,6 +235,25 @@ config CPU_FREQ_GOV_SCHEDUTIL
 
 	  If in doubt, say N.
 
+config CPU_FREQ_GOV_REFLEX
+	tristate "'reflex' cpufreq policy governor"
+	depends on CPU_FREQ && SMP && CPU_FREQ_GOV_SCHEDUTIL
+	select CPU_FREQ_GOV_ATTR_SET
+	select IRQ_WORK
+	help
+	  This governor combines interactive-style fast ramp-up with
+	  schedutil's scheduler utilization tracking.  It uses EWMA smoothing
+	  and trend-based load prediction for proactive frequency scaling.
+
+	  When a CPU transitions from idle to busy, the governor instantly
+	  jumps to a configurable "hispeed" floor derived from recent idle-
+	  time accounting, then proportionally scales based on scheduler
+	  utilization data (like schedutil) as that floor decays.
+
+	  Ported from firelzrd's linux7.1-reflex-v0.3.2 to this 4.19/MTK tree.
+
+	  If in doubt, say N.
+
 comment "CPU frequency scaling drivers"
 
 config CPUFREQ_DT
