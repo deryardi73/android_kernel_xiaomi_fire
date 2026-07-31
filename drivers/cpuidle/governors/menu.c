@@ -21,6 +21,8 @@
 #include <linux/sched/stat.h>
 #include <linux/math64.h>
 
+#include "gov.h"
+
 /*
  * Please note when changing the tuning values:
  * If (MAX_INTERESTING-1) * RESOLUTION > UINT_MAX, the result of

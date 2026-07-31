@@ -6,6 +6,7 @@ config CPU_IDLE
 	select CPU_IDLE_GOV_LADDER if (!NO_HZ && !NO_HZ_IDLE)
 	select CPU_IDLE_GOV_MENU if (NO_HZ || NO_HZ_IDLE)
 	select CPU_IDLE_GOV_MTK_MENU if (NO_HZ || NO_HZ_IDLE) && !CPU_IDLE_NO_MTK
+	select CPU_IDLE_GOV_NAP if ARM64 && KERNEL_MODE_NEON
 	help
 	  CPU idle is a generic framework for supporting software-controlled
 	  idle processor power management.  It includes modular cross-platform
@@ -39,6 +40,20 @@ config CPU_IDLE_GOV_MTK_MENU
           and modify predict_us policy to fit
           execution characteristics of MTK SoCs.
           MTK menu can be substituted for upstream menu governor
+
+config CPU_IDLE_GOV_NAP
+	bool "Neural Adaptive Predictor (NAP) governor"
+	depends on ARM64 && KERNEL_MODE_NEON
+	help
+	  A machine-learning-based cpuidle governor that uses a small
+	  neural network (MLP 8x8) to predict the optimal idle state.
+	  Weights are initialized from hardware idle-state parameters
+	  and refined via online learning (deferred backpropagation
+	  with SGD). Requires NEON SIMD.
+
+	  Select via cpuidle.governor=nap on the kernel command line.
+
+	  If unsure, say N.
 
 config CPU_IDLE_NO_MTK
 	bool "Disable MTK related cpuidle driver / governor"
