@@ -3,11 +3,11 @@
  *
  * LZ4KDR -- speed-tuned derivative of Huawei's LZ4KD, wired into the
  * generic crypto compress API the same way lz4/lz4hc/zstd are, so that
- * zram's zcomp_create("lz4kdr") picks it up with zero changes to
- * drivers/block/zram/*.
+ * zram's zcomp_create("lz4kdr") picks it up with zero changes to the
+ * zram driver itself.
  *
  * Backported from firelzrd's linux6.12.74-lz4kdr-1.3 patch, which
- * targets the newer per-algorithm "backend_*.c" zram driver layout
+ * targets the newer per-algorithm "backend_NNN.c" zram driver layout
  * that doesn't exist on this 4.19 tree. lib/lz4kdr/{lz4kdr_encode.c,
  * lz4kdr_decode.c,*.h} and include/linux/lz4kdr.h are carried over
  * unmodified (they're kernel-version-agnostic); this file replaces
