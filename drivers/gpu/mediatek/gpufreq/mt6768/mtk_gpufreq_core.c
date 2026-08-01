@@ -2447,7 +2447,7 @@ static void __mt_gpufreq_update_max_limited_idx(void)
 		g_max_limited_idx = limited_idx;
 		g_limiter = limiter;
 
-		gpufreq_pr_info("@%s: g_max_limited_idx = %d, g_limiter = %d\n",
+		gpufreq_pr_debug("@%s: g_max_limited_idx = %d, g_limiter = %d\n",
 			__func__,
 			g_max_limited_idx,
 			g_limiter);
