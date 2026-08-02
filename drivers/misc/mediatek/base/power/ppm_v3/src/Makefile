@@ -40,7 +40,6 @@ ccflags-y += \
 	-I$(srctree)/drivers/misc/mediatek/base/power/$(CONFIG_MTK_PLATFORM)	\
 	-I$(srctree)/drivers/gpu/mediatek/gpufreq/include	\
 	-I$(srctree)/drivers/misc/mediatek/power_throttling       \
-	-I$(srctree)/drivers/misc/mediatek/thermal/$(CONFIG_MTK_PLATFORM)/inc       \
 
 ifeq ($(CONFIG_MACH_MT6877), y)
 ccflags-y += \

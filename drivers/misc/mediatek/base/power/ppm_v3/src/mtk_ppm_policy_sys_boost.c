@@ -8,9 +8,6 @@
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/slab.h>
-#include <linux/err.h>
-#include <linux/thermal.h>
-#include "tzcpu_initcfg.h"
 #include "mtk_ppm_internal.h"
 
 
@@ -155,55 +152,6 @@ void mt_ppm_sysboost_core(enum ppm_sysboost_user user, unsigned int core_num)
 }
 EXPORT_SYMBOL(mt_ppm_sysboost_core);
 
-/*
- * DERY: XM_THERM (mi_thermald, Xiaomi's userspace thermal daemon) is
- * observed clamping cluster 1's max freq to a fixed low ceiling
- * (idx corresponding to ~1.45-1.71GHz) permanently, regardless of
- * actual temperature -- confirmed via /proc/pl_lk + polling each
- * thermal_zone's temp node under /sys/class/thermal: zone temps
- * stayed 35-44C the whole time while the XM_THERM
- * limit never moved. This points to mi_thermald running a static/stale
- * thermal table tuned for stock HyperOS behavior, not real sensor data.
- *
- * Rather than unconditionally dropping every XM_THERM request (which
- * would also discard genuinely warranted throttling on builds/ROMs
- * where mi_thermald's table *is* still valid), only override it when
- * the actual CPU package temperature is comfortably below the trip
- * point configured in tzcpu_initcfg.h (TZCPU_INITCFG_TRIP_1_TEMP,
- * read directly from that header, not duplicated as a literal here
- * -- its value differs across branches/configs) -- i.e. only when
- * XM_THERM is demonstrably capping
- * something that isn't hot. If the zone can't be read, or the reading
- * is at/above the safety margin, XM_THERM's request is honored as
- * normal: fail open toward respecting the vendor daemon, not toward
- * ignoring it.
- *
- * Zone name "mtktsCPU" is registered by mtk_ts_firecpu.c, which is
- * this device's actual CPU thermal zone driver (gated on
- * CONFIG_WT_FIRE_THERMAL_NTC, Wingtech's fire-specific NTC config --
- * confirmed set in fire_defconfig). thermal_zone_get_temp() returns
- * millidegrees C, matching the tzcpu_initcfg.h convention once
- * divided by 1000.
- */
-#define XM_THERM_SAFE_MARGIN_C	10
-
-static bool xm_therm_should_override(void)
-{
-	struct thermal_zone_device *tz;
-	int temp;
-
-	tz = thermal_zone_get_zone_by_name("mtktsCPU");
-	if (IS_ERR(tz))
-		return false; /* zone not ready/found: fail open, honor XM_THERM */
-
-	if (thermal_zone_get_temp(tz, &temp))
-		return false; /* read failed: fail open, honor XM_THERM */
-
-	/* TZCPU_INITCFG_TRIP_1_TEMP is millidegrees C, from tzcpu_initcfg.h */
-	return temp < (TZCPU_INITCFG_TRIP_1_TEMP -
-		(XM_THERM_SAFE_MARGIN_C * 1000));
-}
-
 void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 {
 	struct ppm_sysboost_data *data;
@@ -214,10 +162,6 @@ void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 			__func__, user, freq);
 		return;
 	}
-
-	/* DERY: see xm_therm_should_override() for rationale */
-	if (user == BOOST_BY_XM_THERMAL && xm_therm_should_override())
-		return;
 
 	ppm_lock(&sysboost_policy.lock);
 
@@ -278,16 +222,6 @@ void mt_ppm_sysboost_set_freq_limit(enum ppm_sysboost_user user,
 	unsigned int cluster, int min_freq, int max_freq)
 {
 	struct ppm_sysboost_data *data;
-
-	/*
-	 * DERY: only override XM_THERM's cluster freq clamp when we're
-	 * demonstrably not warm -- see xm_therm_should_override() for
-	 * full rationale. Thermal protection is still enforced
-	 * separately via the thermal zone trip points (tzcpu_initcfg.h /
-	 * ATM cpu_adaptive_0) regardless of this policy layer.
-	 */
-	if (user == BOOST_BY_XM_THERMAL && xm_therm_should_override())
-		return;
 
 	if (cluster >= NR_PPM_CLUSTERS) {
 		ppm_err("Invalid input: cluster = %d\n", cluster);
