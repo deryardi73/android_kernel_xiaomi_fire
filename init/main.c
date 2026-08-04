@@ -9,7 +9,7 @@
  *  Simplified starting of init:  Michael A. Griffith <grif@acm.org>
  */
 
-#define DEBUG		/* Enable initcall_debug */
+// #define DEBUG		/* Enable initcall_debug */
 
 #include <linux/types.h>
 #include <linux/extable.h>
@@ -493,8 +493,8 @@ void __init __weak thread_stack_cache_init(void)
 }
 #endif
 
-bool initcall_debug;
-core_param(initcall_debug, initcall_debug, bool, 0644);
+bool initcall_debug = false;
+// core_param(initcall_debug, initcall_debug, bool, 0644);
 
 #ifdef TRACEPOINTS_ENABLED
 static void __init initcall_debug_enable(void);
