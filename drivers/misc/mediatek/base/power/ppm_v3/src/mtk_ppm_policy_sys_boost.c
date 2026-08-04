@@ -223,6 +223,15 @@ void mt_ppm_sysboost_set_freq_limit(enum ppm_sysboost_user user,
 {
 	struct ppm_sysboost_data *data;
 
+	/*
+	 * Disable XM_THERM frequency limiting - prevents aggressive thermal
+	 * throttling that reduces max frequency too early.
+	 */
+	if (user == BOOST_BY_XM_THERMAL) {
+		ppm_dbg(SYS_BOOST, "XM_THERM freq limit disabled\n");
+		return;
+	}
+
 	if (cluster >= NR_PPM_CLUSTERS) {
 		ppm_err("Invalid input: cluster = %d\n", cluster);
 		return;
