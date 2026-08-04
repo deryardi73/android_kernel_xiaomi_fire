@@ -2799,6 +2799,8 @@ retry_private:
 
 	if (uval != val) {
 		queue_unlock(*hb);
+		if (!strcmp(current->comm, "C2N-mgr-looper"))
+		    schedule_timeout_interruptible(msecs_to_jiffies(5));
 		ret = -EWOULDBLOCK;
 	}
 
