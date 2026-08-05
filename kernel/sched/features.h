@@ -13,7 +13,7 @@ SCHED_FEAT(PLACE_DEADLINE_INITIAL, true)
  * Once picked, let an eligible task run until its deadline instead of
  * re-running the EEVDF search every opportunity.
  */
-SCHED_FEAT(RUN_TO_PARITY, true)
+SCHED_FEAT(RUN_TO_PARITY, false)
 
 /*
  * Prefer to schedule the task we woke last (assuming it failed

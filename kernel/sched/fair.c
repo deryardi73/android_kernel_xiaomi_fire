@@ -729,16 +729,9 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	avg_vruntime_add(cfs_rq, se);
 	se->min_deadline = se->deadline;
 
-	/*
-	 * Find the right place in the rbtree:
-	 */
 	while (*link) {
 		parent = *link;
 		entry = rb_entry(parent, struct sched_entity, run_node);
-		/*
-		 * We dont care about collisions. Nodes with
-		 * the same key stay together.
-		 */
 		if (entity_before(se, entry)) {
 			link = &parent->rb_left;
 		} else {
@@ -748,23 +741,21 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	}
 
 	rb_link_node(&se->run_node, parent, link);
-	/*
-	 * 4.19's rbtree_augmented.h has no rb_add_augmented_cached()
-	 * helper: propagate the (already-initialised) leaf's augmented
-	 * value up through its ancestors ourselves before the tree is
-	 * rebalanced, exactly like the equivalent open-coded sequence in
-	 * mm/mmap.c's vma_rb_insert().
-	 */
-	if (parent)
-		min_deadline_cb_propagate(parent, NULL);
-	rb_insert_augmented_cached(&se->run_node, &cfs_rq->tasks_timeline,
-				   leftmost, &min_deadline_cb);
+	rb_insert_augmented(&se->run_node, &cfs_rq->tasks_timeline.rb_root,
+			    &min_deadline_cb);
+
+	/* Update cached leftmost pointer */
+	if (leftmost || !cfs_rq->tasks_timeline.rb_leftmost ||
+	    entity_before(se, rb_entry(cfs_rq->tasks_timeline.rb_leftmost,
+				       struct sched_entity, run_node)))
+		cfs_rq->tasks_timeline.rb_leftmost = &se->run_node;
 }
 
 static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	rb_erase_augmented_cached(&se->run_node, &cfs_rq->tasks_timeline,
-				  &min_deadline_cb);
+	rb_erase_augmented(&se->run_node, &cfs_rq->tasks_timeline.rb_root,
+			   &min_deadline_cb);
+	cfs_rq->tasks_timeline.rb_leftmost = rb_first(&cfs_rq->tasks_timeline.rb_root);
 	avg_vruntime_sub(cfs_rq, se);
 }
 
@@ -886,7 +877,7 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 		struct sched_entity *left = __pick_first_entity(cfs_rq);
 
 		if (left) {
-			pr_err_ratelimited("EEVDF scheduling fail, picking leftmost\n");
+			printk_deferred(KERN_ERR "EEVDF scheduling fail, picking leftmost\n");
 			return left;
 		}
 	}
@@ -3135,9 +3126,11 @@ dequeue_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *se) { }
 static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 			    unsigned long weight, unsigned long runnable)
 {
+	bool curr = cfs_rq->curr == se;
+
 	if (se->on_rq) {
 		/* commit outstanding execution time */
-		if (cfs_rq->curr == se)
+		if (curr)
 			update_curr(cfs_rq);
 		account_entity_dequeue(cfs_rq, se);
 		dequeue_runnable_load_avg(cfs_rq, se);
@@ -3158,7 +3151,24 @@ static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 #endif
 
 	enqueue_load_avg(cfs_rq, se);
+
 	if (se->on_rq) {
+		/*
+		 * EEVDF: when nice changes, we must recalculate deadline and slice.
+		 * deadline = vruntime + calc_delta_fair(slice, se)
+		 */
+		se->slice = sysctl_sched_base_slice;
+		se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+
+		/*
+		 * If task is in the tree (not curr), reinsert to update min_deadline.
+		 * curr is not in the tree, so no need to reinsert.
+		 */
+		if (!curr) {
+			__dequeue_entity(cfs_rq, se);
+			__enqueue_entity(cfs_rq, se);
+		}
+
 		account_entity_enqueue(cfs_rq, se);
 		enqueue_runnable_load_avg(cfs_rq, se);
 	}
@@ -4274,17 +4284,9 @@ static inline void check_schedstat_required(void)
  * CPU and an up-to-date min_vruntime on the destination CPU.
  */
 
-static void
-enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
+static void enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 {
 	bool curr = cfs_rq->curr == se;
-
-	/*
-	 * If we're the current task, we must renormalise before calling
-	 * update_curr().
-	 */
-	if (curr)
-		place_entity(cfs_rq, se, flags);
 
 	update_curr(cfs_rq);
 
@@ -4393,8 +4395,7 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 		update_min_vruntime(cfs_rq);
 }
 
-static void
-set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
+static void set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	/* 'current' is not kept within the tree. */
 	if (se->on_rq) {
@@ -4406,11 +4407,6 @@ set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		update_stats_wait_end(cfs_rq, se);
 		__dequeue_entity(cfs_rq, se);
 		update_load_avg(cfs_rq, se, UPDATE_TG);
-		/*
-		 * HACK: stash a copy of deadline at the point of pick in
-		 * vlag, which isn't used again until dequeue.
-		 */
-		se->vlag = se->deadline;
 	}
 
 	update_stats_curr_start(cfs_rq, se);
@@ -12110,7 +12106,7 @@ static unsigned int get_rr_interval_fair(struct rq *rq, struct task_struct *task
 	 * idle runqueue:
 	 */
 	if (rq->cfs.load.weight)
-		rr_interval = NS_TO_JIFFIES(se->slice);
+		rr_interval = NS_TO_JIFFIES(sysctl_sched_base_slice);
 
 	return rr_interval;
 }
