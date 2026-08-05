@@ -507,6 +507,10 @@ struct cfs_rq {
 	u64			min_vruntime_copy;
 #endif
 
+	/* EEVDF: weighted average vruntime, see avg_vruntime() in fair.c */
+	s64			avg_vruntime;
+	u64			avg_load;
+
 	struct rb_root_cached	tasks_timeline;
 
 	/*
@@ -515,8 +519,13 @@ struct cfs_rq {
 	 */
 	struct sched_entity	*curr;
 	struct sched_entity	*next;
-	struct sched_entity	*last;
-	struct sched_entity	*skip;
+	/*
+	 * EEVDF: ->last (LAST_BUDDY) and ->skip (yield's skip
+	 * buddy) are gone - preemption now goes through pick_eevdf() and
+	 * sched_yield() pushes se->deadline out instead. Only ->next
+	 * (NEXT_BUDDY) remains, and it's now checked against
+	 * entity_eligible() before being honoured.
+	 */
 
 #ifdef	CONFIG_SCHED_DEBUG
 	unsigned int		nr_spread_over;
@@ -1054,6 +1063,38 @@ static inline int cpu_of(struct rq *rq)
 	return 0;
 #endif
 }
+
+/*
+ * EEVDF: these used to be static inline in fair.c only, but
+ * kernel/sched/debug.c also needs cfs_rq_of() (for entity_eligible() in
+ * the /proc/sched_debug task listing), so they live here now, same as
+ * upstream v6.6+.
+ */
+#ifdef CONFIG_FAIR_GROUP_SCHED
+static inline struct cfs_rq *task_cfs_rq(struct task_struct *p)
+{
+	return p->se.cfs_rq;
+}
+
+/* runqueue on which this entity is (to be) queued */
+static inline struct cfs_rq *cfs_rq_of(struct sched_entity *se)
+{
+	return se->cfs_rq;
+}
+#else
+static inline struct cfs_rq *task_cfs_rq(struct task_struct *p)
+{
+	return &task_rq(p)->cfs;
+}
+
+static inline struct cfs_rq *cfs_rq_of(struct sched_entity *se)
+{
+	struct task_struct *p = container_of(se, struct task_struct, se);
+	struct rq *rq = task_rq(p);
+
+	return &rq->cfs;
+}
+#endif
 
 
 #ifdef CONFIG_SCHED_SMT
@@ -1729,6 +1770,7 @@ extern const u32		sched_prio_to_wmult[40];
 #else
 #define ENQUEUE_MIGRATED	0x00
 #endif
+#define ENQUEUE_INITIAL		0x80 /* EEVDF: fresh task, half-slice deadline */
 
 #define RETRY_TASK		((void *)-1UL)
 
@@ -2226,6 +2268,8 @@ static inline void double_rq_unlock(struct rq *rq1, struct rq *rq2)
 
 extern struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq);
 extern struct sched_entity *__pick_last_entity(struct cfs_rq *cfs_rq);
+extern u64 avg_vruntime(struct cfs_rq *cfs_rq);
+extern int entity_eligible(struct cfs_rq *cfs_rq, struct sched_entity *se);
 
 #ifdef	CONFIG_SCHED_DEBUG
 extern bool sched_debug_enabled;

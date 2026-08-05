@@ -498,10 +498,20 @@ struct sched_entity {
 	struct sched_avg		avg;
 #endif
 
-	ANDROID_KABI_RESERVE(1);
-	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
+	/*
+	 * EEVDF: reuse the KABI reserve slots so struct
+	 * sched_entity keeps its size/layout instead of growing.
+	 *   deadline     - absolute virtual deadline: ve_i + r_i/w_i
+	 *   min_deadline - augmented rb-tree heap key: min(deadline, children)
+	 *   vlag         - virtual lag at dequeue; doubles as a scratch copy
+	 *                  of ->deadline between pick and put (see
+	 *                  set_next_entity())
+	 *   slice        - requested runtime (protocol slice length)
+	 */
+	ANDROID_KABI_USE(1, u64 deadline);
+	ANDROID_KABI_USE(2, u64 min_deadline);
+	ANDROID_KABI_USE(3, s64 vlag);
+	ANDROID_KABI_USE(4, u64 slice);
 };
 
 struct sched_rt_entity {

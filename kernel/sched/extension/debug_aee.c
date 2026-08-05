@@ -698,6 +698,7 @@ static void sched_debug_header_at_AEE(struct seq_file *m)
 	SEQ_printf_at_AEE(m, "  .%-40s: %lld\n", #x, (long long)(x))
 #define PN(x) \
 	SEQ_printf_at_AEE(m, "  .%-40s: %lu\n", #x, SPLIT_NS(x))
+	PN(sysctl_sched_base_slice);
 	PN(sysctl_sched_latency);
 	PN(sysctl_sched_min_granularity);
 	PN(sysctl_sched_wakeup_granularity);
