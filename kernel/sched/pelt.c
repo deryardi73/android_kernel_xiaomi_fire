@@ -411,7 +411,7 @@ int update_irq_load_avg(struct rq *rq, u64 running)
 __read_mostly unsigned int sched_pelt_lshift;
 
 #ifdef CONFIG_SYSCTL
-unsigned int sysctl_sched_pelt_multiplier = 1;
+unsigned int sysctl_sched_pelt_multiplier = 2;
 
 int sched_pelt_multiplier(struct ctl_table *table, int write, void *buffer,
 			  size_t *lenp, loff_t *ppos)
