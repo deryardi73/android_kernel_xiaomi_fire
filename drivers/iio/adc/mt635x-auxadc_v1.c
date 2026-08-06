@@ -360,7 +360,7 @@ static void auxadc_reset(struct mt635x_auxadc_device *adc_dev)
 				   adc_dev->rst_setting[i][1],
 				   adc_dev->rst_setting[i][2]);
 	}
-	dev_notice(adc_dev->dev, "reset AUXADC done\n");
+	/* dev_notice(adc_dev->dev, "reset AUXADC done\n"); */
 }
 
 static void auxadc_timeout_handler(struct mt635x_auxadc_device *adc_dev,
@@ -385,9 +385,9 @@ static void auxadc_timeout_handler(struct mt635x_auxadc_device *adc_dev,
 			break;
 		strncat(reg_log, reg_str, ARRAY_SIZE(reg_log) - 1);
 	}
-	dev_notice(adc_dev->dev,
+	/* dev_notice(adc_dev->dev,
 		   "(%d)Time out!(%d) %s\n",
-		   ch_num, timeout_times, reg_log);
+		   ch_num, timeout_times, reg_log); */
 	if (timeout_times == 11)
 		auxadc_reset(adc_dev);
 }
@@ -444,7 +444,7 @@ static int mt635x_auxadc_read_raw(struct iio_dev *indio_dev,
 	const struct auxadc_channels *auxadc_chan;
 	unsigned short auxadc_out;
 	int ret;
-	static DEFINE_RATELIMIT_STATE(ratelimit, 1 * HZ, 5);
+	/* static DEFINE_RATELIMIT_STATE(ratelimit, 5 * HZ, 1); */
 
 	mutex_lock(&adc_dev->lock);
 	pm_stay_awake(adc_dev->dev);
@@ -470,12 +470,12 @@ static int mt635x_auxadc_read_raw(struct iio_dev *indio_dev,
 	default:
 		return -EINVAL;
 	}
-	if (__ratelimit(&ratelimit)) {
-		dev_info(adc_dev->dev,
+	/* if (__ratelimit(&ratelimit)) {
+		dev_dbg(adc_dev->dev,
 			"name:%s, channel=%d, adc_out=0x%x, adc_result=%d\n",
 			auxadc_chan->ch_name, auxadc_chan->ch_num,
 			auxadc_out, *val);
-	}
+	} */
 	return ret;
 
 }
@@ -662,7 +662,7 @@ static int mt635x_auxadc_probe(struct platform_device *pdev)
 		iio_map_array_unregister(indio_dev);
 		return ret;
 	}
-	dev_info(&pdev->dev, "%s done\n", __func__);
+	/* dev_info(&pdev->dev, "%s done\n", __func__); */
 
 	ret = pmic_auxadc_chip_init(&pdev->dev);
 	if (ret < 0) {
