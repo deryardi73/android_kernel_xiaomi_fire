@@ -791,6 +791,17 @@ static struct sched_entity *__pick_eevdf(struct cfs_rq *cfs_rq)
 	best = curr;
 
 	/*
+	 * Fastpath: if current is eligible and its deadline is <=
+	 * the minimum deadline in the whole tree, we can return it
+	 * without traversing the tree. This avoids O(log n) overhead.
+	 */
+	if (curr && node) {
+		struct sched_entity *root_se = rb_entry(node, struct sched_entity, run_node);
+		if (curr->deadline <= root_se->min_deadline)
+			return curr;
+	}
+
+	/*
 	 * Once picked, RUN_TO_PARITY keeps a still-eligible task running
 	 * until it consumes its request (se->vlag stashes a copy of
 	 * ->deadline at pick time, see the HACK in set_next_entity()).
@@ -873,16 +884,41 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 {
 	struct sched_entity *se = __pick_eevdf(cfs_rq);
 
-	if (!se) {
-		struct sched_entity *left = __pick_first_entity(cfs_rq);
+	if (se)
+		return se;
 
+	/*
+	 * Fallback: if __pick_eevdf() fails (corner case), scan the entire
+	 * rbtree to find the eligible entity with the earliest deadline.
+	 * This is O(n) but should only happen rarely.
+	 */
+	{
+		struct rb_node *node = rb_first_cached(&cfs_rq->tasks_timeline);
+		struct sched_entity *best = NULL;
+
+		while (node) {
+			struct sched_entity *cur = rb_entry(node, struct sched_entity, run_node);
+			if (entity_eligible(cfs_rq, cur)) {
+				if (!best || deadline_gt(deadline, best, cur))
+					best = cur;
+			}
+			node = rb_next(node);
+		}
+
+		if (best)
+			return best;
+	}
+
+	/* Ultimate fallback: pick leftmost */
+	{
+		struct sched_entity *left = __pick_first_entity(cfs_rq);
 		if (left) {
 			printk_deferred(KERN_ERR "EEVDF scheduling fail, picking leftmost\n");
 			return left;
 		}
 	}
 
-	return se;
+	return NULL;
 }
 
 #ifdef CONFIG_SCHED_DEBUG
@@ -940,6 +976,9 @@ static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	 * while the request time r_i is sysctl_sched_base_slice.
 	 */
 	se->slice = sysctl_sched_base_slice;
+	/* Prevent slice overflow */
+	if (unlikely(se->slice == U64_MAX || se->slice == 0))
+		se->slice = sysctl_sched_base_slice;
 
 	/* EEVDF: vd_i = ve_i + r_i/w_i */
 	se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
@@ -3158,7 +3197,16 @@ static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 		 * deadline = vruntime + calc_delta_fair(slice, se)
 		 */
 		se->slice = sysctl_sched_base_slice;
+		/* Prevent slice overflow */
+		if (unlikely(se->slice == U64_MAX || se->slice == 0))
+			se->slice = sysctl_sched_base_slice;
 		se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+
+		/* Clamp vlag to prevent overflow (Android nice change fix) */
+		{
+			s64 limit = calc_delta_fair(max_t(u64, 2 * se->slice, TICK_NSEC), se);
+			se->vlag = clamp(se->vlag, -limit, limit);
+		}
 
 		/*
 		 * If task is in the tree (not curr), reinsert to update min_deadline.
