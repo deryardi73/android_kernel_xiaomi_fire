@@ -3,7 +3,7 @@
  * EEVDF: using avg_vruntime, preserve lag across sleep/wake
  * cycles instead of resetting it (placement strategy #1, #2 if off).
  */
-SCHED_FEAT(PLACE_LAG, true)
+SCHED_FEAT(PLACE_LAG, false)
 /*
  * Give newly created tasks half a slice, so they ease into the
  * competition instead of a full request straight away.
