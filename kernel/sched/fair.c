@@ -51,7 +51,7 @@ unsigned int normalized_sysctl_sched_latency		= 6000000ULL;
  * (default: 0.75 msec * (1 + ilog(ncpus)), units: nanoseconds - same
  *  default magnitude as the old sysctl_sched_min_granularity)
  */
-unsigned int sysctl_sched_base_slice			= 750000ULL;
+unsigned int sysctl_sched_base_slice			= 3000000ULL;
 unsigned int normalized_sysctl_sched_base_slice	= 750000ULL;
 
 /*
