@@ -1123,7 +1123,15 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	curr->sum_exec_runtime += delta_exec;
 	schedstat_add(cfs_rq->exec_clock, delta_exec);
 
-	curr->vruntime += calc_delta_fair(delta_exec, curr);
+	{
+		u64 delta = calc_delta_fair(delta_exec, curr);
+		curr->vruntime += delta;
+		/* Prevent avg_vruntime overflow leading to NULL deref */
+		if (unlikely(curr->vruntime < cfs_rq->min_vruntime - (1ULL << 40))) {
+			curr->vruntime = cfs_rq->min_vruntime;
+		}
+	}
+
 	update_deadline(cfs_rq, curr);
 	update_min_vruntime(cfs_rq);
 
@@ -3209,10 +3217,17 @@ static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 		/* Clamp vlag to prevent overflow (Android nice change fix) */
 		{
 			s64 limit = calc_delta_fair(max_t(u64, 2 * se->slice, TICK_NSEC), se);
+			/* Ensure vruntime is not too low to avoid avg_vruntime underflow */
+			if (unlikely(se->vruntime < cfs_rq->min_vruntime - (1ULL << 40))) {
+				se->vruntime = cfs_rq->min_vruntime;
+				se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+				se->vprot = se->deadline + calc_delta_fair(se->slice, se);
+			}
 			se->vlag = clamp(se->vlag, -limit, limit);
 		}
 
 		/*
+
 		 * If task is in the tree (not curr), reinsert to update min_deadline.
 		 * curr is not in the tree, so no need to reinsert.
 		 */
@@ -5376,11 +5391,13 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
 	if (rq->cfs.h_nr_running <= 1)
 		return;
 
-	delta = se->deadline - se->vruntime;
-	if (delta < 0) {
+	/* Protect against underflow if vruntime > deadline */
+	delta = (se->deadline > se->vruntime) ? se->deadline - se->vruntime : 0;
+
+	if (delta <= 0) {
 		if (rq->curr == p)
 			resched_curr(rq);
-		return;
+		return delta = 0;
 	}
 
 	hrtick_start(rq, delta);
