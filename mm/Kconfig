@@ -790,6 +790,13 @@ config MTK_MM_DEBUG
 	  type of errors. Wrap the debug code with this config,
 	  so we can remove the debug code by disabling it.
 
+config KSWAPD_CPU
+	hex "Set kswapd cpu affinity by default"
+	default 0x3F
+	help
+	  Set kswapd cpu affinity by default. 0x3F means allowing CPU as 0 to 5.
+	  To disable this config, set this to 0.
+
 # multi-gen LRU {
 config LRU_GEN
 	bool "Multi-Gen LRU"
