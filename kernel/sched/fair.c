@@ -5397,7 +5397,7 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
 	if (delta <= 0) {
 		if (rq->curr == p)
 			resched_curr(rq);
-		return delta = 0;
+		return;
 	}
 
 	hrtick_start(rq, delta);
