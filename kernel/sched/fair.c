@@ -3169,8 +3169,9 @@ static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 
 	if (se->on_rq) {
 		/* commit outstanding execution time */
-		if (curr)
-			update_curr(cfs_rq);
+		update_curr(cfs_rq);
+		/* EEVDF: capture lag before reweight */
+		update_entity_lag(cfs_rq, se);
 		account_entity_dequeue(cfs_rq, se);
 		dequeue_runnable_load_avg(cfs_rq, se);
 	}
@@ -3201,6 +3202,9 @@ static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 		if (unlikely(se->slice == U64_MAX || se->slice == 0))
 			se->slice = sysctl_sched_base_slice;
 		se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+
+		/* Update vprot for fairness (upstream fix) */
+		se->vprot = se->deadline + calc_delta_fair(se->slice, se);
 
 		/* Clamp vlag to prevent overflow (Android nice change fix) */
 		{
@@ -5365,21 +5369,21 @@ static inline void unthrottle_offline_cfs_rqs(struct rq *rq) {}
 static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
 {
 	struct sched_entity *se = &p->se;
+	s64 delta;
 
 	SCHED_WARN_ON(task_rq(p) != rq);
 
-	if (rq->cfs.h_nr_running > 1) {
-		u64 ran = se->sum_exec_runtime - se->prev_sum_exec_runtime;
-		u64 slice = se->slice;
-		s64 delta = slice - ran;
+	if (rq->cfs.h_nr_running <= 1)
+		return;
 
-		if (delta < 0) {
-			if (rq->curr == p)
-				resched_curr(rq);
-			return;
-		}
-		hrtick_start(rq, delta);
+	delta = se->deadline - se->vruntime;
+	if (delta < 0) {
+		if (rq->curr == p)
+			resched_curr(rq);
+		return;
 	}
+
+	hrtick_start(rq, delta);
 }
 
 /*

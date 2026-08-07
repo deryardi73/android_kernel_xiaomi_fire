@@ -512,6 +512,7 @@ struct sched_entity {
 	ANDROID_KABI_USE(2, u64 min_deadline);
 	ANDROID_KABI_USE(3, s64 vlag);
 	ANDROID_KABI_USE(4, u64 slice);
+	ANDROID_KABI_USE(5, u64 vprot);
 };
 
 struct sched_rt_entity {
