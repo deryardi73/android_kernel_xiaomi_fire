@@ -441,8 +441,11 @@ static struct sched_entity *__pick_next_entity(struct sched_entity *se)
 /* runqueue "owned" by this group */
 static inline struct cfs_rq *group_cfs_rq(struct sched_entity *grp)
 {
+#ifdef CONFIG_FAIR_GROUP_SCHED
 	return grp->my_q;
-
+#else
+	return NULL;
+#endif
 }
 
 /* must hold runqueue lock for queue se is currently on */
