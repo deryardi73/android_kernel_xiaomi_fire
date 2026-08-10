@@ -1851,20 +1851,6 @@ config CRYPTO_LZ4HC
 	help
 	  This is the LZ4 high compression mode algorithm.
 
-config CRYPTO_LZ4KDR
-	tristate "LZ4KDR compression algorithm"
-	select CRYPTO_ALGAPI
-	select CRYPTO_ACOMP2
-	select LZ4KDR_COMPRESS
-	select LZ4KDR_DECOMPRESS
-	help
-	  LZ4KDR is a speed-tuned derivative of Huawei's LZ4KD, a
-	  zram-oriented LZ4 variant. It is wire-compatible with the
-	  original LZ4KD encoding -- only the encoder's internal
-	  search behavior was changed for speed, decode is untouched.
-	  See include/linux/lz4kdr.h for the attribution note and
-	  what changed.
-
 config CRYPTO_ZSTD
 	tristate "Zstd compression algorithm"
 	select CRYPTO_ALGAPI
