@@ -195,7 +195,7 @@ static bool g_keep_opp_freq_state;
 static bool g_opp_stress_test_state;
 static bool g_fixed_freq_volt_state;
 static bool g_pbm_limited_ignore_state;
-static bool g_thermal_protect_limited_ignore_state;
+static bool g_thermal_protect_limited_ignore_state = true;
 static bool g_ptpod_ver_over_v2;
 static unsigned int g_efuse_id;
 static unsigned int g_ptpod_ver;
