@@ -477,7 +477,7 @@ static const struct file_operations mmstat_fmt_proc_fops = {
 
 static int __init trace_mmstat_init(void)
 {
-	hungersize = totalram_pages * TRACE_HUNGER_PERCENTAGE / 100;
+	hungersize = totalram_pages() * TRACE_HUNGER_PERCENTAGE / 100;
 
 	debugfs_create_file("mmstat_fmt", 0444, NULL, NULL,
 			&mmstat_fmt_proc_fops);
