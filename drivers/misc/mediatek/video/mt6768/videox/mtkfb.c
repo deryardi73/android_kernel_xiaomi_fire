@@ -14,6 +14,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/kthread.h>
 #include <linux/vmalloc.h>
+#include <linux/workqueue.h>
 #include "disp_assert_layer.h"
 #include <linux/semaphore.h>
 #include <linux/mutex.h>
@@ -265,9 +266,9 @@ int mdss_prim_panel_fb_unblank(int timeout)
 			atomic_set(&prim_panel_is_on, true);
 			if (timeout > 0) {
 					printk("SXF %s ,timeout  = %d\n", __func__, timeout);
-					schedule_delayed_work(&prim_panel_work, msecs_to_jiffies(timeout));
+					queue_delayed_work(system_power_efficient_wq, &prim_panel_work, msecs_to_jiffies(timeout));
 			}	else
-					schedule_delayed_work(&prim_panel_work, msecs_to_jiffies(WAIT_SUSPEND_TIMEOUT));
+					queue_delayed_work(system_power_efficient_wq, &prim_panel_work, msecs_to_jiffies(WAIT_SUSPEND_TIMEOUT));
 		}
 		unlock_fb_info(prim_fbi);
 #ifdef CONFIG_FRAMEBUFFER_CONSOLE
