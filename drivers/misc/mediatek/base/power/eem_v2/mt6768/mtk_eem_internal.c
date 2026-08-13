@@ -98,7 +98,9 @@ struct eem_det eem_detectors[NR_EEM_DET] = {
 	[EEM_DET_L] = {
 		.name		= __stringify(EEM_DET_L),
 		.ops		= &cpu_det_ops,
-		.volt_offset	= 5,
+#ifdef EEM_OFFSET_PROC_SHOW
+		.volt_offset	= 0,
+#endif
 		.ctrl_id	= EEM_CTRL_L,
 		.features	= FEA_INIT01 | FEA_INIT02,
 		.max_freq_khz	= 1800000,
@@ -126,7 +128,9 @@ struct eem_det eem_detectors[NR_EEM_DET] = {
 	[EEM_DET_B] = {
 		.name		= __stringify(EEM_DET_B),
 		.ops		= &cpu_det_ops,
-		.volt_offset	= 7,
+#ifdef EEM_OFFSET_PROC_SHOW
+		.volt_offset	= 0,
+#endif
 		.ctrl_id	= EEM_CTRL_B,
 		.features	= FEA_INIT01 | FEA_INIT02,
 		.max_freq_khz	= 2000000,
@@ -158,7 +162,9 @@ struct eem_det eem_detectors[NR_EEM_DET] = {
 	[EEM_DET_CCI] = {
 		.name		= __stringify(EEM_DET_CCI),
 		.ops		= &cci_det_ops,
-		.volt_offset 	= 5,
+#ifdef EEM_OFFSET_PROC_SHOW
+		.volt_offset = 0,
+#endif
 		.ctrl_id	= EEM_CTRL_CCI,
 		.features	= FEA_INIT01 | FEA_INIT02,
 		.max_freq_khz	= 1277000,
