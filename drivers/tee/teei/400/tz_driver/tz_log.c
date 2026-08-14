@@ -222,6 +222,8 @@ int teei_log_fn(void *work)
 #ifdef CONFIG_MICROTRUST_TZ_LOG
 		msleep(20);
 		tz_driver_dump_logs(s);
+#else
+		msleep(20);
 #endif
 
 	}
