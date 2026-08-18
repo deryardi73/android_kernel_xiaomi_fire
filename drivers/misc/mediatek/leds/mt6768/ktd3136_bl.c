@@ -647,7 +647,7 @@ static void ktd3137_flash_brightness_set(struct led_classdev *cdev,
 
 	ktd3137_masked_write(chip->client, REG_MODE, 0x02, 0x02);
 
-	schedule_delayed_work(&chip->work, chip->pdata->flash_timeout);
+	queue_delayed_work(system_power_efficient_wq, &chip->work, chip->pdata->flash_timeout);
 }
 
 static int ktd3137_flashled_init(struct i2c_client *client,
@@ -950,7 +950,7 @@ static int ktd3137_update_brightness(struct backlight_device *bl)
 		ktd3137_masked_write(chip->client, REG_MODE, 0x01, 0x00);
 
 	ktd3137_brightness_set_workfunc(chip, brightness);
-	schedule_delayed_work(&chip->work, 100);
+	queue_delayed_work(system_power_efficient_wq, &chip->work, 100);
 
 	return 0;
 }
