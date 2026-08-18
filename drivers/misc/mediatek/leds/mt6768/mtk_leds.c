@@ -931,7 +931,7 @@ void mt_mt65xx_led_set(struct led_classdev *led_cdev, enum led_brightness level)
 	if (strcmp(led_data->cust.name, "lcd-backlight") != 0) {
 		LEDS_DEBUG("Set NLED directly %d at time %lu\n",
 			   led_data->level, jiffies);
-		schedule_work(&led_data->work);
+		queue_work(system_power_efficient_wq, &led_data->work);
 		return;
 	}
 
