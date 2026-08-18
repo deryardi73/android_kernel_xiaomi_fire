@@ -179,7 +179,7 @@ static void aw3641e_work_disable(struct work_struct *data)
 
 static enum hrtimer_restart aw3641e_timer_close(struct hrtimer *timer)
 {
-	schedule_work(&aw3641e_work);
+	queue_work(system_power_efficient_wq, &aw3641e_work);
 	return HRTIMER_NORESTART;
 }
 
