@@ -2182,6 +2182,34 @@ out:
 }
 #endif /* CONFIG_NUMA_BALANCING || CONFIG_MTK_SCHED_BIG_TASK_MIGRATE */
 
+void sched_migrate_to_cpumask_start(struct cpumask *old_mask,
+				    const struct cpumask *dest)
+{
+	struct task_struct *p = current;
+
+	raw_spin_lock_irq(&p->pi_lock);
+	*cpumask_bits(old_mask) = *cpumask_bits(&p->cpus_allowed);
+	raw_spin_unlock_irq(&p->pi_lock);
+
+	set_cpus_allowed_ptr(p, dest);
+}
+
+void sched_migrate_to_cpumask_end(const struct cpumask *old_mask,
+				  const struct cpumask *dest)
+{
+	struct task_struct *p = current;
+
+	raw_spin_lock_irq(&p->pi_lock);
+	if (*cpumask_bits(&p->cpus_allowed) == *cpumask_bits(dest)) {
+		struct rq *rq = this_rq();
+
+		raw_spin_lock(&rq->lock);
+		do_set_cpus_allowed(p, old_mask);
+		raw_spin_unlock(&rq->lock);
+	}
+	raw_spin_unlock_irq(&p->pi_lock);
+}
+
 /*
  * wait_task_inactive - wait for a thread to unschedule.
  *
