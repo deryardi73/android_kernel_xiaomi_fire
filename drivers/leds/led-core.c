@@ -11,6 +11,7 @@
  *
  */
 
+#include <linux/workqueue.h>
 #include <linux/kernel.h>
 #include <linux/leds.h>
 #include <linux/list.h>
@@ -241,7 +242,7 @@ void led_set_brightness(struct led_classdev *led_cdev,
 		 */
 		if (brightness == LED_OFF) {
 			set_bit(LED_BLINK_DISABLE, &led_cdev->work_flags);
-			schedule_work(&led_cdev->set_brightness_work);
+			queue_work(system_power_efficient_wq, &led_cdev->set_brightness_work);
 		} else {
 			set_bit(LED_BLINK_BRIGHTNESS_CHANGE,
 				&led_cdev->work_flags);
@@ -263,7 +264,7 @@ void led_set_brightness_nopm(struct led_classdev *led_cdev,
 
 	/* If brightness setting can sleep, delegate it to a work queue task */
 	led_cdev->delayed_set_value = value;
-	schedule_work(&led_cdev->set_brightness_work);
+	queue_work(system_power_efficient_wq, &led_cdev->set_brightness_work);
 }
 EXPORT_SYMBOL_GPL(led_set_brightness_nopm);
 
