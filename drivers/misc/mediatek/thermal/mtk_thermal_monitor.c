@@ -2049,7 +2049,7 @@ int mtk_thermal_zone_bind_trigger_trip(
 struct thermal_zone_device *tz, int trip, int mode)
 {
 	THRML_LOG("%s trip %d\n", __func__, trip);
-	schedule_delayed_work(&(tz->poll_queue), 0);
+	queue_delayed_work(system_power_efficient_wq, &(tz->poll_queue), 0);
 	return 0;
 }
 EXPORT_SYMBOL(mtk_thermal_zone_bind_trigger_trip);
