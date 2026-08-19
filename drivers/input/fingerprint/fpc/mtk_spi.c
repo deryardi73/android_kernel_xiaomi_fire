@@ -515,7 +515,7 @@ static int mtk6797_probe(struct spi_device *spidev)
 
 	fpc->wakeup_enabled = false;
 
-	irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
+	irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT | IRQF_PERF_AFFINE;
 	/*if (of_property_read_bool(dev->of_node, "fpc,enable-wakeup")) {
 		irqf |= IRQF_NO_SUSPEND;
 		device_init_wakeup(dev, 1);
