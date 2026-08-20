@@ -70,6 +70,16 @@ __read_mostly int scheduler_running;
  */
 int sysctl_sched_rt_runtime = 950000;
 
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+/*
+ * Decay the thermal signal 4x faster than the normal PELT signal, so that
+ * a thermal event fed into the scheduler is reflected in the reduced CPU
+ * capacity within a couple of ticks, instead of the ~200ms half-life of a
+ * regular PELT signal.
+ */
+unsigned int sysctl_sched_thermal_decay_shift = 0;
+#endif
+
 /*
  * __task_rq_lock - lock the rq @p resides on.
  */
@@ -4025,6 +4035,8 @@ void scheduler_tick(void)
 	rq_lock(rq, &rf);
 
 	update_rq_clock(rq);
+	update_thermal_load_avg(rq_clock_thermal(rq), rq,
+				 arch_scale_thermal_pressure(cpu_of(rq)));
 	curr->sched_class->task_tick(rq, curr, 0);
 	cpu_load_update_active(rq);
 	calc_global_load_tick(rq);
