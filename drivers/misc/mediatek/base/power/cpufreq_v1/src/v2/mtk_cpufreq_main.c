@@ -5,6 +5,7 @@
 
 #include <linux/random.h>
 #include <linux/pm_opp.h>
+#include <linux/topology.h>
 #include <linux/energy_model.h>
 #include <mt-plat/met_drv.h>
 /* project includes */
@@ -1147,6 +1148,36 @@ static unsigned int _calc_new_opp_idx(struct mt_cpu_dvfs *p, int new_opp_idx)
 }
 
 
+static void cpu_dvfs_update_thermal_pressure(struct mt_cpu_dvfs *p,
+					       int limit_idx)
+{
+	struct cpufreq_policy *policy = p->mt_policy;
+	unsigned long max_capacity, capacity;
+	unsigned int limit_freq, max_freq;
+
+	if (!policy)
+		return;
+
+	max_freq = cpu_dvfs_get_max_freq(p);
+	if (!max_freq)
+		return;
+
+	if (limit_idx < 0)
+		limit_freq = max_freq;
+	else
+		limit_freq = cpu_dvfs_get_freq_by_idx(p, limit_idx);
+
+	max_capacity = arch_scale_cpu_capacity(NULL,
+					cpumask_first(policy->related_cpus));
+	capacity = (unsigned long)limit_freq * max_capacity / max_freq;
+
+	if (capacity > max_capacity)
+		capacity = max_capacity;
+
+	arch_set_thermal_pressure(policy->related_cpus,
+				   max_capacity - capacity);
+}
+
 static void ppm_limit_callback(struct ppm_client_req req)
 {
 	struct ppm_client_req *ppm = (struct ppm_client_req *)&req;
@@ -1154,15 +1185,30 @@ static void ppm_limit_callback(struct ppm_client_req req)
 
 #ifdef CONFIG_HYBRID_CPU_DVFS
 	for (i = 0; i < ppm->cluster_num; i++) {
-		if (ppm->cpu_limit[i].has_advise_freq)
+		struct mt_cpu_dvfs *p = id_to_cpu_dvfs(i);
+		int limit_idx;
+
+		if (ppm->cpu_limit[i].has_advise_freq) {
 			cpuhvfs_set_min_max(i,
 				ppm->cpu_limit[i].advise_cpufreq_idx,
 				ppm->cpu_limit[i].advise_cpufreq_idx);
-		else
+			limit_idx = ppm->cpu_limit[i].advise_cpufreq_idx;
+		} else {
 			cpuhvfs_set_min_max(i,
 				ppm->cpu_limit[i].min_cpufreq_idx,
 				ppm->cpu_limit[i].max_cpufreq_idx);
+			limit_idx = ppm->cpu_limit[i].max_cpufreq_idx;
+		}
 		cpuhvfs_write_advise_freq(i, ppm->cpu_limit[i].has_advise_freq);
+
+		/*
+		 * Feed the resulting ceiling into the scheduler's thermal
+		 * pressure signal so that cpu_capacity reflects the loss of
+		 * headroom immediately, instead of only after cpufreq
+		 * converges on the next request.
+		 */
+		if (p)
+			cpu_dvfs_update_thermal_pressure(p, limit_idx);
 	}
 #else
 	unsigned long flags;
@@ -1197,6 +1243,14 @@ static void ppm_limit_callback(struct ppm_client_req req)
 			ppm->cpu_limit[i].max_cpufreq_idx;
 			/* ppm update limit */
 		}
+
+		/*
+		 * Feed the resulting ceiling into the scheduler's thermal
+		 * pressure signal so that cpu_capacity reflects the loss of
+		 * headroom immediately, instead of only after cpufreq
+		 * converges on the next request.
+		 */
+		cpu_dvfs_update_thermal_pressure(p, p->idx_opp_ppm_limit);
 	}
 	cpufreq_para_unlock(flags);
 
