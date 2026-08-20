@@ -8929,6 +8929,8 @@ static void update_blocked_averages(int cpu)
 	update_rt_rq_load_avg(rq_clock_pelt(rq), rq, curr_class == &rt_sched_class);
 	update_dl_rq_load_avg(rq_clock_pelt(rq), rq, curr_class == &dl_sched_class);
 	update_irq_load_avg(rq, 0);
+	update_thermal_load_avg(rq_clock_thermal(rq), rq,
+				 arch_scale_thermal_pressure(cpu_of(rq)));
 	/* Don't need periodic decay once load/util_avg are null */
 	if (others_have_blocked(rq))
 		done = false;
@@ -9006,6 +9008,8 @@ static inline void update_blocked_averages(int cpu)
 	update_rt_rq_load_avg(rq_clock_pelt(rq), rq, curr_class == &rt_sched_class);
 	update_dl_rq_load_avg(rq_clock_pelt(rq), rq, curr_class == &dl_sched_class);
 	update_irq_load_avg(rq, 0);
+	update_thermal_load_avg(rq_clock_thermal(rq), rq,
+				 arch_scale_thermal_pressure(cpu_of(rq)));
 #ifdef CONFIG_NO_HZ_COMMON
 	rq->last_blocked_load_update_tick = jiffies;
 	if (!cfs_rq_has_blocked(cfs_rq) && !others_have_blocked(rq))
@@ -9129,6 +9133,7 @@ static unsigned long scale_rt_capacity(int cpu, unsigned long max)
 	}
 #endif
 	used += READ_ONCE(rq->avg_dl.util_avg);
+	used += thermal_load_avg(rq);
 
 	if (unlikely(used >= max))
 		return 1;
