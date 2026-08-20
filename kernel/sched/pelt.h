@@ -17,6 +17,26 @@ update_irq_load_avg(struct rq *rq, u64 running)
 }
 #endif
 
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+int update_thermal_load_avg(u64 now, struct rq *rq, u64 capacity);
+
+static inline u64 thermal_load_avg(struct rq *rq)
+{
+	return READ_ONCE(rq->avg_thermal.load_avg);
+}
+#else
+static inline int
+update_thermal_load_avg(u64 now, struct rq *rq, u64 capacity)
+{
+	return 0;
+}
+
+static inline u64 thermal_load_avg(struct rq *rq)
+{
+	return 0;
+}
+#endif
+
 /*
  * When a task is dequeued, its estimated utilization should not be update if
  * its util_avg has not been updated at least once.
@@ -58,6 +78,18 @@ static inline u64 rq_clock_pelt(struct rq *rq)
 
 	return rq->clock_pelt - rq->lost_idle_time;
 }
+
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+static inline u64 rq_clock_thermal(struct rq *rq)
+{
+	return rq_clock_task(rq) >> sysctl_sched_thermal_decay_shift;
+}
+#else
+static inline u64 rq_clock_thermal(struct rq *rq)
+{
+	return rq_clock_task(rq);
+}
+#endif
 
 /*
  * The clock_pelt scales the time to reflect the effective amount of
@@ -191,6 +223,22 @@ static inline int
 update_irq_load_avg(struct rq *rq, u64 running)
 {
 	return 0;
+}
+
+static inline int
+update_thermal_load_avg(u64 now, struct rq *rq, u64 capacity)
+{
+	return 0;
+}
+
+static inline u64 thermal_load_avg(struct rq *rq)
+{
+	return 0;
+}
+
+static inline u64 rq_clock_thermal(struct rq *rq)
+{
+	return rq_clock_task(rq);
 }
 
 static inline u64 rq_clock_task_mult(struct rq *rq)
