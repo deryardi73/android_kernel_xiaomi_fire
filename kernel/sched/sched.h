@@ -971,6 +971,9 @@ struct rq {
 #ifdef CONFIG_HAVE_SCHED_AVG_IRQ
 	struct sched_avg	avg_irq;
 #endif
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+	struct sched_avg	avg_thermal;
+#endif
 	u64			idle_stamp;
 	u64			avg_idle;
 
@@ -2037,6 +2040,22 @@ static __always_inline
 unsigned long arch_scale_max_freq_capacity(struct sched_domain *sd, int cpu)
 {
 	return SCHED_CAPACITY_SCALE;
+}
+#endif
+
+#ifndef arch_scale_thermal_pressure
+static __always_inline
+unsigned long arch_scale_thermal_pressure(int cpu)
+{
+	return 0;
+}
+#endif
+
+#ifndef arch_set_thermal_pressure
+static __always_inline
+void arch_set_thermal_pressure(const struct cpumask *cpus,
+				unsigned long th_pressure)
+{
 }
 #endif
 
