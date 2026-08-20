@@ -432,6 +432,18 @@ config HAVE_SCHED_AVG_IRQ
 	depends on IRQ_TIME_ACCOUNTING || PARAVIRT_TIME_ACCOUNTING
 	depends on SMP
 
+config SCHED_THERMAL_PRESSURE
+	bool "Scheduler thermal pressure"
+	default y if ARM64 && SMP
+	depends on SMP
+	depends on CPU_THERMAL
+	help
+	  Select this option to enable thermal pressure accounting in the
+	  scheduler. Thermal pressure is the value conveyed to the scheduler
+	  that reflects the extra CPU capacity loss, on top of the CPU
+	  capacity loss due to raw clock throttling, due to a maximum
+	  frequency capping because of a thermal event.
+
 config BSD_PROCESS_ACCT
 	bool "BSD Process Accounting"
 	depends on MULTIUSER
