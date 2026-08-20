@@ -163,6 +163,31 @@ void topology_set_cpu_scale(unsigned int cpu, unsigned long capacity)
 	per_cpu(cpu_scale, cpu) = capacity;
 }
 
+DEFINE_PER_CPU(unsigned long, thermal_pressure);
+
+/**
+ * topology_set_thermal_pressure() - Set thermal pressure for CPUs
+ * @cpus: The related CPUs for which capacity has been reduced
+ * @th_pressure: The thermal pressure value to set
+ *
+ * Update the value of thermal pressure for all @cpus in the mask. The
+ * cpumask should include all (online+offline) affected CPUs, to avoid
+ * operating on stale data when hot-plug is used for some CPUs. The
+ * @th_pressure value is in the same scale as the CPU capacity
+ * (SCHED_CAPACITY_SCALE) and represents the amount of instantaneous
+ * capacity loss due to a thermal event, on top of the loss already
+ * reflected by frequency invariance.
+ */
+void topology_set_thermal_pressure(const struct cpumask *cpus,
+			       unsigned long th_pressure)
+{
+	int cpu;
+
+	for_each_cpu(cpu, cpus)
+		WRITE_ONCE(per_cpu(thermal_pressure, cpu), th_pressure);
+}
+EXPORT_SYMBOL_GPL(topology_set_thermal_pressure);
+
 static ssize_t cpu_capacity_show(struct device *dev,
 				 struct device_attribute *attr,
 				 char *buf)
