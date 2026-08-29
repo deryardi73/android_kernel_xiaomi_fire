@@ -535,17 +535,6 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= sched_rr_handler,
 	},
-#ifdef CONFIG_SCHED_THERMAL_PRESSURE
-	{
-		.procname	= "sched_thermal_decay_shift",
-		.data		= &sysctl_sched_thermal_decay_shift,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &four,
-	},
-#endif
 #ifdef CONFIG_UCLAMP_TASK
 	{
 		.procname	= "sched_util_clamp_min",

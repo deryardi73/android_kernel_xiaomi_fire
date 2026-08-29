@@ -80,9 +80,10 @@ static inline u64 rq_clock_pelt(struct rq *rq)
 }
 
 #ifdef CONFIG_SCHED_THERMAL_PRESSURE
+extern int sched_thermal_decay_shift;
 static inline u64 rq_clock_thermal(struct rq *rq)
 {
-	return rq_clock_task(rq) >> sysctl_sched_thermal_decay_shift;
+	return rq_clock_task(rq) >> sched_thermal_decay_shift;
 }
 #else
 static inline u64 rq_clock_thermal(struct rq *rq)
