@@ -109,7 +109,7 @@ SCHED_FEAT(FIND_BEST_TARGET, false)
  *   the EAS path for wakeup task placement. Otherwise, put
  *   those tasks through the mainline slow path.
  */
-SCHED_FEAT(EAS_PREFER_IDLE, true)
+SCHED_FEAT(EAS_PREFER_IDLE, false)
 #ifdef CONFIG_MTK_SCHED_LB_ENHANCEMENT
 SCHED_FEAT(SCHED_MTK_EAS, true)
 #else
