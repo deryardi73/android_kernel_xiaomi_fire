@@ -281,6 +281,29 @@ static DEFINE_PER_CPU(struct menu_device, menu_devices);
 
 static void menu_update(struct cpuidle_driver *drv, struct cpuidle_device *dev);
 
+/*
+ * get_iowait_load() - Provide iowait-waiter count for the bucket
+ * selection heuristic below. The load output is unused by
+ * performance_multiplier() (see comment there), so it is kept
+ * as a dummy value for API compatibility.
+ */
+static void get_iowait_load(unsigned long *nr_waiters, unsigned long *load)
+{
+	*nr_waiters = nr_iowait_cpu(smp_processor_id());
+	*load = 0;
+}
+
+/*
+ * cpuidle_get_last_residency() - Compatibility shim for the older
+ * microsecond-based residency API. dev->last_residency_ns replaced
+ * the old int-microsecond field/function upstream; convert back to
+ * microseconds here since the rest of this governor still works in us.
+ */
+static inline unsigned int cpuidle_get_last_residency(struct cpuidle_device *dev)
+{
+	return div_u64(dev->last_residency_ns, NSEC_PER_USEC);
+}
+
 #ifdef USE_TYPICAL_INTERVAL
 /*
  * Try detecting repeating patterns by keeping track of the last 8
