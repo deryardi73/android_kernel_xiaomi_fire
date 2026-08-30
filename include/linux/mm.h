@@ -2947,6 +2947,7 @@ void __init setup_nr_node_ids(void);
 #else
 static inline void setup_nr_node_ids(void) {}
 #endif
+void mm_drop_caches(int val);
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_MM_H */
