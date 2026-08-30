@@ -2496,7 +2496,7 @@ bool uclamp_boosted(struct task_struct *p);
 #ifdef CONFIG_SMP
 static inline unsigned long capacity_orig_of(int cpu)
 {
-	return cpu_rq(cpu)->cpu_capacity_orig;
+	return SCHED_CAPACITY_SCALE;
 }
 #endif
 
