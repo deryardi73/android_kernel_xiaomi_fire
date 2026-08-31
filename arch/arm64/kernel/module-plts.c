@@ -10,6 +10,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/sort.h>
+#include <asm/insn.h>
 
 static bool in_init(const struct module *mod, void *loc)
 {
