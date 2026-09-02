@@ -50,6 +50,20 @@ $(warning Detected assembler with broken .inst; disassembly will be unreliable)
 endif
 
 KBUILD_CFLAGS	+= -mgeneral-regs-only $(lseinstr) $(brokengasinst) $(compat_vdso)
+#ifdef CONFIG_MACH_MT6768
+CL_FLAGS += -O3 -mcpu=cortex-a55+crypto+crc
+GC_FLAGS += -O3 -mcpu=cortex-a75.cortex-a55+crypto+crc
+ifeq ($(cc-name),gcc)
+KBUILD_CFLAGS  += $(GC_FLAGS)
+KBUILD_AFLAGS  += $(GC_FLAGS)
+KBUILD_LDFLAGS += $(GC_FLAGS)
+endif
+ifeq ($(cc-name),clang)
+KBUILD_CFLAGS  += $(CL_FLAGS)
+KBUILD_AFLAGS  += $(CL_FLAGS)
+KBUILD_LDFLAGS += $(CL_FLAGS)
+endif
+#endif
 KBUILD_CFLAGS	+= -fno-asynchronous-unwind-tables
 KBUILD_CFLAGS	+= $(call cc-disable-warning, psabi)
 KBUILD_AFLAGS	+= $(lseinstr) $(brokengasinst) $(compat_vdso)
