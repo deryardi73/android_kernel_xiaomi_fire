@@ -27,13 +27,13 @@
  * See Documentation/block/deadline-iosched.txt
  */
 static const int read_expire = HZ / 2;  /* max time before a read is submitted. */
-static const int write_expire = 5 * HZ; /* ditto for writes, these limits are SOFT! */
+static const int write_expire = HZ; 	/* ditto for writes, these limits are SOFT! */
 /*
  * Time after which to dispatch lower priority requests even if higher
  * priority requests are pending.
  */
 static const int prio_aging_expire = 10 * HZ;
-static const int writes_starved = 2;    /* max times reads can starve a write */
+static const int writes_starved = 1;    /* max times reads can starve a write */
 static const int fifo_batch = 16;       /* # of sequential requests treated as one
 				     by the above parameters. For throughput. */
 
@@ -704,7 +704,7 @@ static int dd_init_sched(struct request_queue *q, struct elevator_type *e)
 	dd->fifo_expire[DD_READ] = read_expire;
 	dd->fifo_expire[DD_WRITE] = write_expire;
 	dd->writes_starved = writes_starved;
-	dd->front_merges = 1;
+	dd->front_merges = 0;
 	dd->last_dir = DD_WRITE;
 	dd->fifo_batch = fifo_batch;
 	dd->prio_aging_expire = prio_aging_expire;
