@@ -20,10 +20,9 @@
 #include <linux/compiler.h>
 #include <linux/rbtree.h>
 #include <linux/sbitmap.h>
-#include <linux/hrtimer.h>
-#include <linux/ktime.h>
 #include <linux/ioprio.h>
 #include <linux/hashtable.h>
+#include <linux/elevator.h>
 
 #include <trace/events/block.h>
 
@@ -32,7 +31,6 @@
 #include "blk-mq-debugfs.h"
 #include "blk-mq-tag.h"
 #include "blk-mq-sched.h"
-#include "elevator.h"
 
 /*
  * Priority levels
@@ -116,10 +114,6 @@ struct cpq_data {
 
 	/* Hash table for request lookup */
 	DECLARE_HASHTABLE(hash, CPQ_HASH_BITS);
-
-	/* Timer */
-	struct hrtimer idle_slice_timer;
-	bool idle_slice_armed;
 
 	/* Dispatch state */
 	unsigned int batching;
@@ -244,60 +238,6 @@ static struct request *cpq_rb_former_request(struct request_queue *q,
 }
 
 /*
- * Check if group has no more requests
- */
-static bool cpq_group_no_more_request(struct cpq_group *group)
-{
-	int i, j;
-
-	for (i = 0; i < CPQ_PRIO_LEVELS; i++) {
-		for (j = 0; j < CPQ_DIR_COUNT; j++) {
-			if (!list_empty(&group->prio[i].fifo_list[j]))
-				return false;
-			if (!RB_EMPTY_ROOT(&group->prio[i].sort_list[j]))
-				return false;
-		}
-	}
-
-	return true;
-}
-
-/*
- * Arm idle slice timer
- */
-static void cpq_arm_slice_timer(struct cpq_data *cd, struct cpq_group *group)
-{
-	ktime_t expires;
-
-	if (!cpq_group_no_more_request(group))
-		return;
-
-	if (cd->idle_slice_armed)
-		return;
-
-	expires = ns_to_ktime(cd->slice_idle);
-	hrtimer_start_range_ns(&cd->idle_slice_timer, expires,
-	                       0, HRTIMER_MODE_REL);
-	cd->idle_slice_armed = true;
-}
-
-/*
- * Timer callback
- */
-static enum hrtimer_restart cpq_idle_slice_timer(struct hrtimer *timer)
-{
-	struct cpq_data *cd = container_of(timer, struct cpq_data,
-	                                    idle_slice_timer);
-	unsigned long flags;
-
-	spin_lock_irqsave(&cd->lock, flags);
-	cd->idle_slice_armed = false;
-	spin_unlock_irqrestore(&cd->lock, flags);
-
-	return HRTIMER_NORESTART;
-}
-
-/*
  * Remove request from queues
  */
 static void cpq_remove_request(struct request_queue *q,
@@ -328,10 +268,37 @@ static struct request *cpq_dispatch_request_from_queue(struct cpq_data *cd,
 {
 	struct request *rq = NULL;
 	struct cpq_rq *crq;
-	int dir;
+	int order[CPQ_DIR_COUNT];
+	int dir, k;
 
-	/* Check both read and write queues */
-	for (dir = 0; dir < CPQ_DIR_COUNT; dir++) {
+	if (cd->batching < cd->fifo_batch && cq->next_rq[cd->last_dir]) {
+		dir = cd->last_dir;
+		rq = cq->next_rq[dir];
+		cq->next_rq[dir] = elv_rb_latter_request(rq->q, rq);
+		cpq_remove_request(rq->q, cq, rq);
+		cq->dispatched++;
+		goto found;
+	}
+
+	/*
+	 * Decide which direction to try first. Writes are starved of
+	 * service by default (reads are always tried first below), so
+	 * once cd->starved reaches cd->writes_starved we flip the order
+	 * for this dispatch and let a write through.
+	 */
+	if (!list_empty(&cq->fifo_list[CPQ_WRITE]) &&
+	    (list_empty(&cq->fifo_list[CPQ_READ]) ||
+	     cd->starved >= cd->writes_starved)) {
+		order[0] = CPQ_WRITE;
+		order[1] = CPQ_READ;
+	} else {
+		order[0] = CPQ_READ;
+		order[1] = CPQ_WRITE;
+	}
+
+	for (k = 0; k < CPQ_DIR_COUNT; k++) {
+		dir = order[k];
+
 		if (list_empty(&cq->fifo_list[dir]))
 			continue;
 
@@ -344,9 +311,11 @@ static struct request *cpq_dispatch_request_from_queue(struct cpq_data *cd,
 
 		/* Check if deadline expired or aged */
 		if (time_after_eq(now, crq->deadline)) {
+			cd->batching = 0;
+			cq->next_rq[dir] = elv_rb_latter_request(rq->q, rq);
 			cpq_remove_request(rq->q, cq, rq);
 			cq->dispatched++;
-			return rq;
+			goto found;
 		}
 
 		/* Check priority aging */
@@ -361,9 +330,61 @@ static struct request *cpq_dispatch_request_from_queue(struct cpq_data *cd,
 
 			if (node) {
 				rq = rb_entry_rq(node);
+				cd->batching = 0;
+				cq->next_rq[dir] = elv_rb_latter_request(rq->q, rq);
 				cpq_remove_request(rq->q, cq, rq);
 				cq->dispatched++;
-				return rq;
+				goto found;
+			}
+		}
+	}
+
+	return NULL;
+
+found:
+	if (dir == CPQ_WRITE)
+		cd->starved = 0;
+	else if (!list_empty(&cq->fifo_list[CPQ_WRITE]))
+		cd->starved++;
+
+	cd->last_dir = dir;
+	return rq;
+}
+
+/*
+ * Scan for requests that have aged past cd->prio_aging_expire in a
+ * lower-than-RT queue and dispatch them ahead of strict group/priority
+ * order, so continuous RT traffic can't starve BE/IDLE indefinitely.
+ */
+static struct request *cpq_dispatch_aged_requests(struct cpq_data *cd,
+                                                   unsigned long now)
+{
+	struct request *rq;
+	struct cpq_rq *crq;
+	int i, j, dir;
+
+	for (i = 0; i < CPQ_GROUPS; i++) {
+		for (j = CPQ_PRIO_BE; j <= CPQ_PRIO_IDLE; j++) {
+			struct cpq_queue *cq = &cd->groups[i].prio[j];
+
+			for (dir = 0; dir < CPQ_DIR_COUNT; dir++) {
+				if (list_empty(&cq->fifo_list[dir]))
+					continue;
+
+				rq = rq_entry_fifo(cq->fifo_list[dir].next);
+				crq = rq->elv.priv[0];
+				if (!crq)
+					continue;
+
+				if (cd->prio_aging_expire && !crq->aged &&
+				    time_after_eq(now, crq->issue_time + cd->prio_aging_expire))
+					crq->aged = 1;
+
+				if (crq->aged) {
+					cpq_remove_request(rq->q, cq, rq);
+					cq->dispatched++;
+					return rq;
+				}
 			}
 		}
 	}
@@ -418,11 +439,6 @@ static int cpq_init_sched(struct request_queue *q, struct elevator_type *e)
 	spin_lock_init(&cd->lock);
 	spin_lock_init(&cd->zone_lock);
 
-	/* Initialize timer */
-	hrtimer_init(&cd->idle_slice_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	cd->idle_slice_timer.function = cpq_idle_slice_timer;
-	cd->idle_slice_armed = false;
-
 	/* Initialize dispatch state */
 	cd->batching = 0;
 	cd->starved = 0;
@@ -443,8 +459,6 @@ static int cpq_init_sched(struct request_queue *q, struct elevator_type *e)
 	eq->elevator_data = cd;
 	q->elevator = eq;
 
-	blk_queue_flag_set(QUEUE_FLAG_SQ_SCHED, q);
-
 	return 0;
 }
 
@@ -455,8 +469,6 @@ static void cpq_exit_sched(struct elevator_queue *e)
 {
 	struct cpq_data *cd = e->elevator_data;
 	int i, j;
-
-	hrtimer_cancel(&cd->idle_slice_timer);
 
 	/* Verify queues are empty */
 	for (i = 0; i < CPQ_GROUPS; i++) {
@@ -472,9 +484,26 @@ static void cpq_exit_sched(struct elevator_queue *e)
 }
 
 /*
- * Initialize hardware context
+ * 'depth' is a number in the range 1..INT_MAX representing a number of
+ * requests. Scale it with a factor (1 << bt->sb.shift) / q->nr_requests
+ * since 1..(1 << bt->sb.shift) is the range expected by
+ * sbitmap_get_shallow(). Values larger than q->nr_requests have the same
+ * effect as q->nr_requests. Mirrors mq-deadline's dd_to_word_depth().
  */
-static int cpq_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
+static int cpq_to_word_depth(struct blk_mq_hw_ctx *hctx, unsigned int qdepth)
+{
+	struct sbitmap_queue *bt = &hctx->sched_tags->bitmap_tags;
+	const unsigned int nrr = hctx->queue->nr_requests;
+
+	return ((qdepth << bt->sb.shift) + nrr - 1) / nrr;
+}
+
+/*
+ * Compute async_depth from the current nr_requests. Called from
+ * init_hctx() and from depth_updated() whenever nr_requests changes
+ * via sysfs (blk_mq_update_nr_requests()).
+ */
+static void cpq_depth_updated(struct blk_mq_hw_ctx *hctx)
 {
 	struct cpq_data *cd = hctx->queue->elevator->elevator_data;
 	unsigned int depth = hctx->queue->nr_requests;
@@ -484,37 +513,35 @@ static int cpq_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
 		shallow_depth = 1;
 
 	cd->async_depth = shallow_depth;
-	sbitmap_queue_min_shallow_depth(&hctx->sched_tags->bitmap_tags,
-	                                 shallow_depth);
-
-	return 0;
+	sbitmap_queue_min_shallow_depth(&hctx->sched_tags->bitmap_tags, 1);
 }
 
 /*
- * Depth updated
+ * Initialize hardware context
  */
-static void cpq_depth_updated(struct blk_mq_hw_ctx *hctx)
+static int cpq_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
 {
-	cpq_init_hctx(hctx, hctx->queue_num);
+	cpq_depth_updated(hctx);
+	return 0;
 }
 
 /*
  * Limit depth
  */
-static void cpq_limit_depth(blk_opf_t opf, struct blk_mq_alloc_data *data)
+static void cpq_limit_depth(unsigned int op, struct blk_mq_alloc_data *data)
 {
 	struct cpq_data *cd = data->q->elevator->elevator_data;
 
-	if (op_is_sync(opf))
+	if (op_is_sync(op))
 		return;
 
-	data->shallow_depth = cd->async_depth;
+	data->shallow_depth = cpq_to_word_depth(data->hctx, cd->async_depth);
 }
 
 /*
  * Prepare request
  */
-static void cpq_prepare_request(struct request *rq)
+static void cpq_prepare_request(struct request *rq, struct bio *bio)
 {
 	struct cpq_rq *crq;
 
@@ -577,8 +604,11 @@ static void cpq_insert_requests(struct blk_mq_hw_ctx *hctx,
 		const enum cpq_data_dir dir = rq_data_dir(rq);
 		struct cpq_queue *cq;
 
-		if (!crq)
+		if (!crq) {
+			list_del_init(&rq->queuelist);
+			blk_mq_request_bypass_insert(rq, false);
 			continue;
+		}
 
 		cq = &cd->groups[crq->group].prio[crq->prio];
 
@@ -605,12 +635,6 @@ static void cpq_insert_requests(struct blk_mq_hw_ctx *hctx,
 		cq->inserted++;
 	}
 
-	/* Cancel timer on new request */
-	if (cd->idle_slice_armed) {
-		hrtimer_try_to_cancel(&cd->idle_slice_timer);
-		cd->idle_slice_armed = false;
-	}
-
 	spin_unlock_irqrestore(&cd->lock, flags);
 }
 
@@ -628,6 +652,13 @@ static struct request *cpq_dispatch_request(struct blk_mq_hw_ctx *hctx)
 
 	spin_lock_irqsave(&cd->lock, flags);
 
+	/* Requests that aged past prio_aging_expire bypass strict order */
+	rq = cpq_dispatch_aged_requests(cd, now);
+	if (rq) {
+		cd->batching++;
+		goto out;
+	}
+
 	/* Try to dispatch from queues with priority and aging */
 	for (i = 0; i < CPQ_GROUPS; i++) {
 		for (j = 0; j < CPQ_PRIO_LEVELS; j++) {
@@ -636,21 +667,8 @@ static struct request *cpq_dispatch_request(struct blk_mq_hw_ctx *hctx)
 			rq = cpq_dispatch_request_from_queue(cd, cq, now);
 			if (rq) {
 				cd->batching++;
-
-				/* Check for batching limit */
-				if (cd->batching >= cd->fifo_batch) {
-					cd->batching = 0;
-				}
-
 				goto out;
 			}
-		}
-	}
-
-	/* No requests found, arm timer if appropriate */
-	if (!rq && !cd->idle_slice_armed) {
-		if (cpq_group_no_more_request(&cd->groups[CPQ_GROUP_FG])) {
-			cpq_arm_slice_timer(cd, &cd->groups[CPQ_GROUP_FG]);
 		}
 	}
 
@@ -680,6 +698,28 @@ static bool cpq_has_work(struct blk_mq_hw_ctx *hctx)
 }
 
 /*
+ * Bio merge - opportunistic front/back merge at bio submission time,
+ * before a request is allocated. Without this hook blk_mq_sched_bio_merge()
+ * always returns false and every bio ends up as its own request.
+ */
+static bool cpq_bio_merge(struct blk_mq_hw_ctx *hctx, struct bio *bio)
+{
+	struct request_queue *q = hctx->queue;
+	struct cpq_data *cd = q->elevator->elevator_data;
+	struct request *free = NULL;
+	bool ret;
+
+	spin_lock(&cd->lock);
+	ret = blk_mq_sched_try_merge(q, bio, &free);
+	spin_unlock(&cd->lock);
+
+	if (free)
+		blk_mq_free_request(free);
+
+	return ret;
+}
+
+/*
  * Request merge
  */
 static int cpq_request_merge(struct request_queue *q, struct request **req,
@@ -705,7 +745,7 @@ static int cpq_request_merge(struct request_queue *q, struct request **req,
 			BUG_ON(sector != blk_rq_pos(__rq));
 			if (elv_bio_merge_ok(__rq, bio)) {
 				*req = __rq;
-				if (blk_discard_mergable(__rq))
+				if (req_op(__rq) == REQ_OP_DISCARD)
 					return ELEVATOR_DISCARD_MERGE;
 				return ELEVATOR_FRONT_MERGE;
 			}
@@ -751,10 +791,7 @@ static void cpq_merged_requests(struct request_queue *q, struct request *rq,
 
 	cq = &cd->groups[crq_next->group].prio[crq_next->prio];
 
-	if (!list_empty(&next->queuelist))
-		list_del_init(&next->queuelist);
-
-	cpq_del_rq_rb(cq, next);
+	cpq_remove_request(q, cq, next);
 	cq->merged++;
 }
 
@@ -768,7 +805,7 @@ static ssize_t __FUNC(struct elevator_queue *e, char *page)           \
 	int __data = __VAR;                                            \
 	if (__CONV)                                                    \
 		__data = jiffies_to_msecs(__data);                     \
-	return sysfs_emit(page, "%d\n", __data);                     \
+	return scnprintf(page, PAGE_SIZE, "%d\n", __data);             \
 }
 
 #define STORE_FUNCTION(__FUNC, __PTR, MIN, MAX, __CONV)                \
@@ -810,7 +847,7 @@ STORE_FUNCTION(cpq_prio_aging_expire_store, &cd->prio_aging_expire, 0, INT_MAX, 
 static ssize_t cpq_fore_timeout_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%d\n",
+	return scnprintf(page, PAGE_SIZE, "%d\n",
 	                  jiffies_to_msecs(cd->groups[CPQ_GROUP_FG].timeout));
 }
 
@@ -832,7 +869,7 @@ static ssize_t cpq_fore_timeout_store(struct elevator_queue *e,
 static ssize_t cpq_back_timeout_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%d\n",
+	return scnprintf(page, PAGE_SIZE, "%d\n",
 	                  jiffies_to_msecs(cd->groups[CPQ_GROUP_BG].timeout));
 }
 
@@ -854,7 +891,7 @@ static ssize_t cpq_back_timeout_store(struct elevator_queue *e,
 static ssize_t cpq_slice_idle_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%llu\n", cd->slice_idle / 1000);
+	return scnprintf(page, PAGE_SIZE, "%llu\n", cd->slice_idle / 1000);
 }
 
 static ssize_t cpq_slice_idle_store(struct elevator_queue *e,
@@ -875,7 +912,7 @@ static ssize_t cpq_slice_idle_store(struct elevator_queue *e,
 static ssize_t cpq_io_threshold_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%llu\n", cd->io_threshold);
+	return scnprintf(page, PAGE_SIZE, "%llu\n", cd->io_threshold);
 }
 
 static ssize_t cpq_io_threshold_store(struct elevator_queue *e,
@@ -896,7 +933,7 @@ static ssize_t cpq_io_threshold_store(struct elevator_queue *e,
 static ssize_t cpq_cpq_log_show(struct elevator_queue *e, char *page)
 {
 	struct cpq_data *cd = e->elevator_data;
-	return sysfs_emit(page, "%u\n", cd->cpq_log);
+	return scnprintf(page, PAGE_SIZE, "%u\n", cd->cpq_log);
 }
 
 static ssize_t cpq_cpq_log_store(struct elevator_queue *e,
@@ -939,17 +976,16 @@ static struct elv_fs_entry cpq_attrs[] = {
  * Elevator type
  */
 static struct elevator_type cpq_mq = {
-	.ops = {
-		.depth_updated = cpq_depth_updated,
+	.ops.mq = {
 		.limit_depth = cpq_limit_depth,
+		.depth_updated = cpq_depth_updated,
 		.insert_requests = cpq_insert_requests,
 		.dispatch_request = cpq_dispatch_request,
 		.prepare_request = cpq_prepare_request,
 		.finish_request = cpq_finish_request,
-		.next_request = elv_rb_latter_request,
-		.former_request = elv_rb_former_request,
 		.next_request = cpq_rb_latter_request,
 		.former_request = cpq_rb_former_request,
+		.bio_merge = cpq_bio_merge,
 		.request_merge = cpq_request_merge,
 		.requests_merged = cpq_merged_requests,
 		.request_merged = cpq_request_merged,
@@ -958,6 +994,7 @@ static struct elevator_type cpq_mq = {
 		.exit_sched = cpq_exit_sched,
 		.init_hctx = cpq_init_hctx,
 	},
+	.uses_mq = true,
 	.elevator_attrs = cpq_attrs,
 	.elevator_name = "cpq",
 	.elevator_owner = THIS_MODULE,
