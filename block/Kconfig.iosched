@@ -88,6 +88,15 @@ config MQ_IOSCHED_KYBER
 	  synchronous writes, it will self-tune queue depths to achieve that
 	  goal.
 
+config MQ_IOSCHED_CPQ
+	tristate "CPQ I/O scheduler"
+	default n
+	---help---
+	  CPQ (Custom Priority Queue) I/O scheduler for the blk-mq
+	  framework. Adds foreground/background group scheduling on top
+	  of RT/BE/IDLE priority levels with deadline-style dispatch and
+	  priority aging.
+
 config MQ_IOSCHED_SSG
 	tristate "SamSung Generic I/O scheduler"
 	default y
