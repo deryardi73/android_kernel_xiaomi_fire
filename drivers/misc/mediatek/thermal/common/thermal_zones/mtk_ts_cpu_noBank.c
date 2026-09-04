@@ -10,6 +10,7 @@
 #include <linux/dmi.h>
 #include <linux/acpi.h>
 #include <linux/thermal.h>
+#include <linux/err.h>
 #include <linux/platform_device.h>
 #include <mt-plat/aee.h>
 #include <linux/types.h>
@@ -1478,12 +1479,24 @@ defined(CONFIG_MACH_MT6893)
 
 static int tscpu_register_thermal(void)
 {
+	int ret;
 
 	tscpu_dprintk("%s\n", __func__);
 
 	/* trips : trip 0~3 */
 	thz_dev = mtk_thermal_zone_device_register("mtktscpu", num_trip, NULL,
 			&mtktscpu_dev_ops, 0, 0, 0, interval);
+
+	if (!IS_ERR_OR_NULL(thz_dev)) {
+		ret = thermal_zone_device_set_policy(thz_dev, "step_wise");
+		if (ret)
+			tscpu_printk(
+				"%s failed to set step_wise governor: %d\n",
+				__func__, ret);
+		else
+			tscpu_dprintk("%s step_wise governor set\n",
+				__func__);
+	}
 
 	return 0;
 }
