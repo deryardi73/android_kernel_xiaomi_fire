@@ -80,6 +80,8 @@ struct mt_cpu_dvfs {
 
 	/* turbo mode */
 	unsigned int turbo_mode;
+
+	struct thermal_cooling_device *cdev;
 };
 
 struct buck_ctrl_t {
