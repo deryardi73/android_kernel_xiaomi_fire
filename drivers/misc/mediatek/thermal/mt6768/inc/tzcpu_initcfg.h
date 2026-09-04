@@ -15,7 +15,7 @@
 #define TZCPU_INITCFG_TRIP_0_COOLER		"mtktscpu-sysrst"
 
 #define TZCPU_INITCFG_TRIP_1_TEMP		(65000)
-#define TZCPU_INITCFG_TRIP_1_COOLER		"cpu_adaptive_0"
+#define TZCPU_INITCFG_TRIP_1_COOLER		""
 
 #define TZCPU_INITCFG_TRIP_2_TEMP		(64000)
 #define TZCPU_INITCFG_TRIP_2_COOLER		""
