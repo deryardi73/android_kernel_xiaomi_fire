@@ -7,6 +7,8 @@
 #include <linux/pm_opp.h>
 #include <linux/topology.h>
 #include <linux/energy_model.h>
+#include <linux/thermal.h>
+#include <linux/cpu_cooling.h>
 #include <mt-plat/met_drv.h>
 /* project includes */
 #include "mtk_ppm_api.h"
@@ -84,6 +86,59 @@ static void modify_kernel_opp_div_by_doe
 struct mt_cpu_dvfs *id_to_cpu_dvfs(enum mt_cpu_dvfs_id id)
 {
 	return (id < NR_MT_CPU_DVFS) ? &cpu_dvfs[id] : NULL;
+}
+
+#define MTK_CDEV_BIND_RETRY_MS   500
+#define MTK_CDEV_BIND_MAX_RETRY  10
+
+static struct delayed_work mtk_cdev_bind_work;
+static int mtk_cdev_bind_retry_cnt;
+static bool mtk_cdev_bind_work_inited;
+
+static void mtk_cdev_bind_work_fn(struct work_struct *work)
+{
+	struct mt_cpu_dvfs *p;
+	struct thermal_zone_device *tz;
+	int i;
+	bool all_bound = true;
+
+	tz = thermal_zone_get_zone_by_name("mtktscpu");
+	if (IS_ERR(tz)) {
+		mtk_cdev_bind_retry_cnt++;
+		if (mtk_cdev_bind_retry_cnt < MTK_CDEV_BIND_MAX_RETRY) {
+			schedule_delayed_work(&mtk_cdev_bind_work,
+				msecs_to_jiffies(MTK_CDEV_BIND_RETRY_MS));
+		} else {
+			tag_pr_notice(
+				"mtktscpu zone still not found after %d retries, giving up gradual cooler bind\n",
+				MTK_CDEV_BIND_MAX_RETRY);
+		}
+		return;
+	}
+
+	for (i = 0; i < NR_MT_CPU_DVFS; i++) {
+		p = &cpu_dvfs[i];
+
+		if (!p->cdev || p->cdev_bound)
+			continue;
+
+		if (thermal_zone_bind_cooling_device(tz, 1, p->cdev,
+				THERMAL_NO_LIMIT, THERMAL_NO_LIMIT,
+				THERMAL_WEIGHT_DEFAULT)) {
+			tag_pr_notice(
+				"failed to bind gradual cpufreq cooler (cluster %d) to mtktscpu trip 1\n",
+				i);
+			all_bound = false;
+		} else {
+			p->cdev_bound = true;
+		}
+	}
+
+	if (!all_bound && mtk_cdev_bind_retry_cnt < MTK_CDEV_BIND_MAX_RETRY) {
+		mtk_cdev_bind_retry_cnt++;
+		schedule_delayed_work(&mtk_cdev_bind_work,
+			msecs_to_jiffies(MTK_CDEV_BIND_RETRY_MS));
+	}
 }
 
 struct buck_ctrl_t *id_to_buck_ctrl(enum mt_cpu_dvfs_buck_id id)
@@ -1425,6 +1480,33 @@ static int _mt_cpufreq_init(struct cpufreq_policy *policy)
 		tag_pr_notice("energy model regist fail\n");
 	if (ret)
 		tag_pr_notice("failed to setup frequency table\n");
+
+	{
+		struct mt_cpu_dvfs *p2 =
+			id_to_cpu_dvfs(_get_cpu_dvfs_id(policy->cpu));
+
+		if (p2 && !p2->cdev) {
+			p2->cdev = cpufreq_cooling_register(policy);
+			if (IS_ERR(p2->cdev)) {
+				tag_pr_notice(
+					"cpufreq cooling register failed: %ld\n",
+					PTR_ERR(p2->cdev));
+				p2->cdev = NULL;
+			} else {
+				p2->cdev_bound = false;
+
+				if (!mtk_cdev_bind_work_inited) {
+					INIT_DELAYED_WORK(&mtk_cdev_bind_work,
+						mtk_cdev_bind_work_fn);
+					mtk_cdev_bind_work_inited = true;
+				}
+
+				schedule_delayed_work(&mtk_cdev_bind_work,
+					msecs_to_jiffies(
+						MTK_CDEV_BIND_RETRY_MS));
+			}
+		}
+	}
 
 	dvfs_init_flag = 1;
 	FUNC_EXIT(FUNC_LV_MODULE);
