@@ -250,6 +250,7 @@ exit:
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(thermal_zone_device_set_policy);
 
 int thermal_build_list_of_policies(char *buf)
 {
