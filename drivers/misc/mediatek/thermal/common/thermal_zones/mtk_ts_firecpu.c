@@ -1149,7 +1149,7 @@ static int mtkts_cpum_register_thermal(void)
 {
 	mtkts_cpum_dprintk("[%s]\n", __func__);
 	/* trips : trip 0~1 */
-	thz_dev = mtk_thermal_zone_device_register("mtktsCPU", num_trip, NULL,
+	thz_dev = mtk_thermal_zone_device_register("mtktsfirecpu", num_trip, NULL,
 						&mtkts_CPUM_dev_ops, 0, 0, 0,
 						interval * 1000);
 	return 0;
