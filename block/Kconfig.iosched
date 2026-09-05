@@ -79,6 +79,13 @@ config MQ_IOSCHED_DEADLINE
 	---help---
 	  MQ version of the deadline IO scheduler.
 
+config MQ_IOSCHED_ADIOS
+	tristate "ADIOS I/O scheduler"
+	default y
+	---help---
+	  ADIOS (Adaptive Deadline I/O Scheduler) for the blk-mq
+	  framework.
+
 config MQ_IOSCHED_KYBER
 	tristate "Kyber I/O scheduler"
 	default y
