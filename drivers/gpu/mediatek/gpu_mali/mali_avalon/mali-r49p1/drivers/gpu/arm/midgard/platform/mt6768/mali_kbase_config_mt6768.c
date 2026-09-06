@@ -113,20 +113,7 @@ static int pm_callback_power_on_nolock(struct kbase_device *kbdev)
 	if (!gpufreq_power_ctrl_enable()) {
 		mtk_common_pm_mfg_active();
 #if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
-		ged_dvfs_gpu_clock_switch_notify(GED_POWER_ON);
-#endif
-		return 1;
-	}
-#else /* CONFIG_MTK_GPUFREQ_V2 */
-	if (mtk_common_gpufreq_bringup()) {
-		mtk_common_pm_mfg_active();
-		return 1;
-	}
-
-	if (!mt_gpufreq_power_ctl_en()) {
-		mtk_common_pm_mfg_active();
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
-		ged_dvfs_gpu_clock_switch_notify(GED_POWER_ON);
+		ged_dvfs_gpu_clock_switch_notify(1);
 #endif
 		return 1;
 	}
@@ -186,12 +173,6 @@ static void pm_callback_power_off_nolock(struct kbase_device *kbdev)
 		return;
 
 	if (!gpufreq_power_ctrl_enable())
-		return;
-#else
-	if (mtk_common_gpufreq_bringup())
-		return;
-
-	if (!mt_gpufreq_power_ctl_en())
 		return;
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 

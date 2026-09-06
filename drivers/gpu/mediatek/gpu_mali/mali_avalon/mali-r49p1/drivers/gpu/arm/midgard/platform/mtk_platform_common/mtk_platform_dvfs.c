@@ -357,8 +357,7 @@ static int mtk_dvfs_gpu_utilization_show(struct seq_file *m, void *v)
 	cur_opp_idx = mtk_common_gpufreq_bringup() ?
 		0 : gpufreq_get_cur_oppidx(TARGET_DEFAULT);
 #else
-	cur_opp_idx = mtk_common_gpufreq_bringup() ?
-		0 : mt_gpufreq_get_cur_freq_index();
+	cur_opp_idx = mt_gpufreq_get_cur_freq_index();
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 
 	seq_printf(m, "ACTIVE=%u 3D/TA/COMPUTE=%u/%u/%u OPP_IDX=%u MFG_PWR=%d\n",

@@ -83,7 +83,7 @@ static int mtk_devfreq_governor_target(struct device *dev,
 
 	freq_khz = *freq / 1000;
 
-	if (mtk_common_gpufreq_bringup() || IS_ERR_OR_NULL(kbdev)) {
+	if (IS_ERR_OR_NULL(kbdev)) {
 		kbdev->current_nominal_freq = 0;
 		return 0;
 	}
@@ -155,15 +155,11 @@ int mtk_devfreq_governor_init(struct kbase_device *kbdev)
 		return ret;
 	}
 
-	if (mtk_common_gpufreq_bringup()) {
-		kbdev->current_nominal_freq = 0;
-	} else {
 #if defined(CONFIG_MTK_GPUFREQ_V2)
 		kbdev->current_nominal_freq = gpufreq_get_cur_freq(TARGET_DEFAULT) * 1000;
 #else
 		kbdev->current_nominal_freq = mt_gpufreq_get_freq_by_idx(mt_gpufreq_get_cur_freq_index()) * 1000;
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
-	}
 
 	return ret;
 }

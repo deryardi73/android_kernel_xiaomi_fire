@@ -377,34 +377,13 @@ void mtk_common_debug(enum mtk_common_debug_types type, struct kbase_context *kc
 	lockdep_on();
 }
 
-int mtk_common_gpufreq_bringup(void)
-{
-	static int bringup = -1;
-
-	if (bringup == -1) {
-#if IS_ENABLED(CONFIG_MTK_GPUFREQ_V2)
-		bringup = gpufreq_bringup();
-#else
-		bringup = mt_gpufreq_bringup();
-#endif /* CONFIG_MTK_GPUFREQ_V2 */
-	}
-
-	return bringup;
-}
-
 int mtk_common_gpufreq_commit(int opp_idx)
 {
 	int ret = -1;
 
 	mutex_lock(&mfg_pm_lock);
 	if (opp_idx >= 0 && mtk_common_pm_is_mfg_active()) {
-#if IS_ENABLED(CONFIG_MTK_GPUFREQ_V2)
-		ret = mtk_common_gpufreq_bringup() ?
-			-1 : gpufreq_commit(TARGET_DEFAULT, opp_idx);
-#else
-		ret = mtk_common_gpufreq_bringup() ?
-			-1 : mt_gpufreq_target(opp_idx, KIR_POLICY);
-#endif /* CONFIG_MTK_GPUFREQ_V2 */
+		ret = mt_gpufreq_target(opp_idx, false);
 	}
 	mutex_unlock(&mfg_pm_lock);
 
@@ -421,8 +400,7 @@ int mtk_common_gpufreq_dual_commit(int gpu_oppidx, int stack_oppidx)
 		ret = mtk_common_gpufreq_bringup() ?
 			-1 : gpufreq_dual_commit(gpu_oppidx, stack_oppidx);
 #else
-		ret = mtk_common_gpufreq_bringup() ?
-			-1 : mt_gpufreq_target(stack_oppidx, KIR_POLICY);
+		ret = mt_gpufreq_target(gpu_oppidx, stack_oppidx);
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 	}
 	mutex_unlock(&mfg_pm_lock);
