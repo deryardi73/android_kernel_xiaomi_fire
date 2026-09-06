@@ -371,14 +371,11 @@ static int mtk_dvfs_gpu_utilization_show(struct seq_file *m, void *v)
 
 	return 0;
 }
-//DEFINE_PROC_SHOW_ATTRIBUTE(mtk_dvfs_gpu_utilization);
 
 int mtk_dvfs_procfs_init(struct kbase_device *kbdev, struct proc_dir_entry *parent)
 {
 	if (IS_ERR_OR_NULL(kbdev))
 		return -1;
-
-//	proc_create(PROC_GPU_UTILIZATION, 0440, parent, &mtk_dvfs_gpu_utilization_proc_ops);
 
 	return 0;
 }
