@@ -82,27 +82,6 @@ int kbase_gpuprops_get_curr_config_props(struct kbase_device *kbdev,
 
 	curr_config->shader_present = curr_config_regdump.shader_present;
 
-#if IS_ENABLED(CONFIG_MALI_MTK_COMMON)
-	/* MTK Modify: Force to set current shader_present. */
-#if IS_ENABLED(CONFIG_MTK_GPUFREQ_V2)
-	force_shader_present = mtk_common_gpufreq_bringup() ?
-		0 : (u64)gpufreq_get_shader_present();
-#else
-	force_shader_present = mtk_common_gpufreq_bringup() ?
-		0 : (u64)mt_gpufreq_get_shader_present();
-#endif /* CONFIG_MTK_GPUFREQ_V2 */
-
-	if (force_shader_present != 0 &&
-		(force_shader_present != curr_config->shader_present) &&
-		(force_shader_present & curr_config->shader_present)) {
-		dev_info(kbdev->dev, "Force curr_config shader_present from 0x%llX to 0x%llX",
-			curr_config->shader_present,
-			force_shader_present & curr_config->shader_present);
-
-		curr_config->shader_present &= force_shader_present;
-	}
-#endif /* CONFIG_MALI_MTK_COMMON */
-
 	curr_config->num_cores = hweight64(curr_config->shader_present);
 
 	curr_config->update_needed = false;
@@ -248,27 +227,6 @@ static int kbase_gpuprops_get_props(struct kbase_device *kbdev)
 		return err;
 
 	gpu_props->shader_present = regdump->shader_present;
-
-#if IS_ENABLED(CONFIG_MALI_MTK_COMMON)
-	/* MTK Modify: Force to set current shader_present. */
-#if IS_ENABLED(CONFIG_MTK_GPUFREQ_V2)
-	force_shader_present = mtk_common_gpufreq_bringup() ?
-		0 : (u64)gpufreq_get_shader_present();
-#else
-	force_shader_present = mtk_common_gpufreq_bringup() ?
-		0 : (u64)mt_gpufreq_get_shader_present();
-#endif /* CONFIG_MTK_GPUFREQ_V2 */
-
-	if (force_shader_present != 0 &&
-		(force_shader_present != gpu_props->shader_present) &&
-		(force_shader_present & gpu_props->shader_present)) {
-		dev_info(kbdev->dev, "Force shader_present from 0x%llX to 0x%llX",
-		gpu_props->shader_present,
-		force_shader_present & gpu_props->shader_present);
-
-		gpu_props->shader_present &= force_shader_present;
-	}
-#endif /* CONFIG_MALI_MTK_COMMON */
 
 	gpu_props->tiler_present = regdump->tiler_present;
 	gpu_props->stack_present = regdump->stack_present;
