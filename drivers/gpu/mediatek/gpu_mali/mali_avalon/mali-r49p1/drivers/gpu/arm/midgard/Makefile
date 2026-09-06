@@ -17,7 +17,7 @@
 # http://www.gnu.org/licenses/gpl-2.0.html.
 #
 #
-ifeq ($(MTK_PLATFORM_VERSION),mt6768)
+
     MTK_GPU_VERSION := $(LOCAL_MTK_GPU_VERSION)
     MTK_PLATFORM := $(MTK_PLATFORM_VERSION)
     CONFIG_MALI_REAL_HW := y
@@ -25,15 +25,14 @@ ifeq ($(MTK_PLATFORM_VERSION),mt6768)
     CONFIG_MALI_MIDGARD_DVFS := y
     CONFIG_MALI_DEVFREQ := y
     # *** MTK CONFIG ***
-    CONFIG_MALI_MTK_MGMM := y
+    CONFIG_MALI_MTK_MGMM := n
     CONFIG_MALI_MTK_BRINGUP := n
-    CONFIG_MALI_MTK_MEMTRACK :=y
+    CONFIG_MALI_MTK_MEMTRACK := n
     CONFIG_MALI_MTK_DEVFREQ_GOVERNOR := y
     CONFIG_MALI_MTK_DEVFREQ_THERMAL := y
     CONFIG_MALI_MTK_PROC_FS := y
-    CONFIG_MTK_GPU_SWPM_SUPPORT :=y
+    CONFIG_MTK_GPU_SWPM_SUPPORT := n
     CONFIG_MALI_TRACE_POWER_GPU_WORK_PERIOD := y
-endif
 
 ifeq ($(BUILD_RULE),OOT)
     ifeq ($(MTK_PLATFORM_VERSION),mt6877)
@@ -532,7 +531,7 @@ else
 endif
 MALI_COVERAGE ?= 0
 
-CONFIG_MALI_PLATFORM_NAME ?= "devicetree"
+CONFIG_MALI_PLATFORM_NAME = "mt6768"
 
 # Kconfig passes in the name with quotes for in-tree builds - remove them.
 MALI_PLATFORM_DIR := $(shell echo $(CONFIG_MALI_PLATFORM_NAME))
