@@ -31,9 +31,9 @@
 #endif
 #include <mtk_gpufreq.h>
 #include <mtk_gpu_utility.h>
-#if IS_ENABLED(CONFIG_MTK_AEE_IPANIC)
-#include <mboot_params.h>
-#endif /* CONFIG_MTK_AEE_IPANIC */
+//#if IS_ENABLED(CONFIG_MTK_AEE_IPANIC)
+//#include <mboot_params.h>
+//#endif /* CONFIG_MTK_AEE_IPANIC */
 
 #if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && \
 	IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY) && \
@@ -89,17 +89,17 @@ enum gpu_dvfs_status_step {
 
 static inline void gpu_dvfs_status_footprint(enum gpu_dvfs_status_step step)
 {
-#if IS_ENABLED(CONFIG_MTK_AEE_IPANIC)
-	aee_rr_rec_gpu_dvfs_status(step |
-				(aee_rr_curr_gpu_dvfs_status() & 0xF0));
-#endif
+//#if IS_ENABLED(CONFIG_MTK_AEE_IPANIC)
+//	aee_rr_rec_gpu_dvfs_status(step |
+//				(aee_rr_curr_gpu_dvfs_status() & 0xF0));
+//#endif
 }
 
 static inline void gpu_dvfs_status_reset_footprint(void)
 {
-#if IS_ENABLED(CONFIG_MTK_AEE_IPANIC)
-	aee_rr_rec_gpu_dvfs_status(0);
-#endif
+//#if IS_ENABLED(CONFIG_MTK_AEE_IPANIC)
+//	aee_rr_rec_gpu_dvfs_status(0);
+//#endif
 }
 
 static int pm_callback_power_on_nolock(struct kbase_device *kbdev)
