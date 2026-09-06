@@ -24,7 +24,7 @@ static int mtk_devfreq_governor_get_target_freq(struct devfreq *df,
 	if (err)
 		return err;
 
-	*freq = (!df->scaling_max_freq) ? UINT_MAX : df->scaling_max_freq;
+	*freq = UINT_MAX;
 
 	return 0;
 }
@@ -39,10 +39,6 @@ static int mtk_devfreq_governor_event_handler(struct devfreq *devfreq,
 
 	case DEVFREQ_GOV_STOP:
 		devfreq_monitor_stop(devfreq);
-		break;
-
-	case DEVFREQ_GOV_UPDATE_INTERVAL:
-		devfreq_update_interval(devfreq, (unsigned int *)data);
 		break;
 
 	case DEVFREQ_GOV_SUSPEND:
@@ -97,22 +93,7 @@ static int mtk_devfreq_governor_target(struct device *dev,
 
 	kbdev->current_nominal_freq =
 		gpufreq_get_cur_freq(TARGET_DEFAULT) * 1000; /* khz to hz*/
-#else
-	opp_idx = mt_gpufreq_get_opp_idx_by_freq(freq_khz);
-	if (opp_idx) {
-		pow = mt_gpufreq_get_power_by_idx(opp_idx);
-		mt_gpufreq_thermal_protect(pow);
-		resume = 0;
-	} else {
-		if (!resume) {
-			mt_gpufreq_thermal_protect(0);
-			resume = 1;
-		}
-	}
-
-	opp_idx = mt_gpufreq_get_cur_freq_index();
-	kbdev->current_nominal_freq = mt_gpufreq_get_freq_by_idx(opp_idx) * 1000;
-#endif /* CONFIG_MTK_GPUFREQ_V2 */
+#endif
 
 	return 0;
 }

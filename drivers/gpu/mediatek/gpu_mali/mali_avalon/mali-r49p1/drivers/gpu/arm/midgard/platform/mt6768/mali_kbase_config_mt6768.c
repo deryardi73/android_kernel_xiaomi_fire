@@ -135,16 +135,12 @@ static int pm_callback_power_on_nolock(struct kbase_device *kbdev)
 		KBASE_PLATFORM_LOGI("%s, GPU fail to power on", __func__);
 		return 0;
 	}
-#else
-	mt_gpufreq_power_control(GPU_PWR_ON, CG_ON, MTCMOS_ON, BUCK_ON);
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 
 	gpu_dvfs_status_footprint(GPU_DVFS_STATUS_STEP_2);
 
 #if defined(CONFIG_MTK_GPUFREQ_V2)
 	// gpufreq_set_ocl_timestamp(); // k61: remove to power on flow
-#else
-	mt_gpufreq_set_timestamp();
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 
 	/* set a flag to enable GPU DVFS */
@@ -158,7 +154,7 @@ static int pm_callback_power_on_nolock(struct kbase_device *kbdev)
 	gpu_dvfs_status_footprint(GPU_DVFS_STATUS_STEP_4);
 
 #if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
-	ged_dvfs_gpu_clock_switch_notify(GED_POWER_ON);
+	ged_dvfs_gpu_clock_switch_notify(1);
 #endif
 
 	gpu_dvfs_status_footprint(GPU_DVFS_STATUS_STEP_5);
@@ -200,8 +196,6 @@ static void pm_callback_power_off_nolock(struct kbase_device *kbdev)
 	/* check MFG bus if idle */
 #if defined(CONFIG_MTK_GPUFREQ_V2)
 	// gpufreq_check_bus_idle(); // k61: remove to power off flow
-#else
-	mt_gpufreq_check_bus_idle();
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 
 	gpu_dvfs_status_footprint(GPU_DVFS_STATUS_STEP_A);
@@ -212,8 +206,6 @@ static void pm_callback_power_off_nolock(struct kbase_device *kbdev)
 		KBASE_PLATFORM_LOGE("Power Off Failed");
 		return;
 	}
-#else
-	mt_gpufreq_power_control(GPU_PWR_OFF, CG_OFF, MTCMOS_OFF, BUCK_OFF);
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 
 	gpu_dvfs_status_footprint(GPU_DVFS_STATUS_STEP_B);
@@ -312,7 +304,7 @@ static void pm_callback_runtime_gpu_active(struct kbase_device *kbdev)
 	kbdev->pm.runtime_active = true;
 #endif
 #if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
-	ged_dvfs_gpu_clock_switch_notify(GED_POWER_ON);
+	ged_dvfs_gpu_clock_switch_notify(1);
 #endif
 
 #if IS_ENABLED(CONFIG_MALI_MTK_AUTOSUSPEND_DELAY)
@@ -365,7 +357,7 @@ if (ged_gpu_apo_support() == APO_2_0_NORMAL_SUPPORT) {
 #endif /* CONFIG_MALI_MTK_ADAPTIVE_POWER_POLICY */
 
 #if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
-	ged_dvfs_gpu_clock_switch_notify(GED_SLEEP);
+	ged_dvfs_gpu_clock_switch_notify(0);
 #endif
 
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);

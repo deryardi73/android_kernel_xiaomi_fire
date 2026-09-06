@@ -33,7 +33,7 @@ struct devfreq_cooling_power mtk_devfreq_cooling_power_ops = {
 
 #else
 
-static unsigned long mtk_devfreq_thermal_get_static_power(struct devfreq *df,
+unsigned long mtk_devfreq_thermal_get_static_power(struct devfreq *df,
                                                           unsigned long voltage /* mV */)
 {
 #if defined(CONFIG_MTK_GPUFREQ_V2)
@@ -45,7 +45,7 @@ static unsigned long mtk_devfreq_thermal_get_static_power(struct devfreq *df,
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 }
 
-static unsigned long mtk_devfreq_thermal_get_dynamic_power(struct devfreq *df,
+unsigned long mtk_devfreq_thermal_get_dynamic_power(struct devfreq *df,
                                                            unsigned long freq /* Hz */,
                                                            unsigned long voltage /* mV */)
 {

@@ -371,14 +371,14 @@ static int mtk_dvfs_gpu_utilization_show(struct seq_file *m, void *v)
 
 	return 0;
 }
-DEFINE_PROC_SHOW_ATTRIBUTE(mtk_dvfs_gpu_utilization);
+//DEFINE_PROC_SHOW_ATTRIBUTE(mtk_dvfs_gpu_utilization);
 
 int mtk_dvfs_procfs_init(struct kbase_device *kbdev, struct proc_dir_entry *parent)
 {
 	if (IS_ERR_OR_NULL(kbdev))
 		return -1;
 
-	proc_create(PROC_GPU_UTILIZATION, 0440, parent, &mtk_dvfs_gpu_utilization_proc_ops);
+//	proc_create(PROC_GPU_UTILIZATION, 0440, parent, &mtk_dvfs_gpu_utilization_proc_ops);
 
 	return 0;
 }
@@ -417,11 +417,7 @@ int mtk_dvfs_init(struct kbase_device *kbdev)
 	ged_dvfs_cal_gpu_utilization_fp = mtk_common_cal_gpu_utilization;
 #endif /* CONFIG_MALI_MTK_DVFS_LOADING_MODE */
 	ged_dvfs_gpu_freq_commit_fp = mtk_common_ged_dvfs_commit;
-	ged_dvfs_gpu_freq_dual_commit_fp = mtk_common_ged_dvfs_dual_commit;
-	ged_dvfs_set_gpu_core_mask_fp = mtk_set_core_mask;
-	mtk_get_system_timer_fp = mtk_common_get_system_timer;
 #endif /* CONFIG_MALI_MIDGARD_DVFS && CONFIG_MALI_MTK_DVFS_POLICY */
-	mtk_set_gpu_idle_fp = mtk_set_gpu_idle_time;
 	return 0;
 }
 
@@ -437,10 +433,7 @@ int mtk_dvfs_term(struct kbase_device *kbdev)
 	ged_dvfs_cal_gpu_utilization_fp = NULL;
 #endif /* CONFIG_MALI_MTK_DVFS_LOADING_MODE */
 	ged_dvfs_gpu_freq_commit_fp = NULL;
-	ged_dvfs_gpu_freq_dual_commit_fp = NULL;
-	ged_dvfs_set_gpu_core_mask_fp = NULL;
 #endif /* CONFIG_MALI_MIDGARD_DVFS && CONFIG_MALI_MTK_DVFS_POLICY */
-	mtk_set_gpu_idle_fp = NULL;
 	return 0;
 }
 

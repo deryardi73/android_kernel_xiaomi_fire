@@ -2457,8 +2457,8 @@ void MTK_update_gpu_LTR(void)
 	u32 gpu_data_ctl = 0;
 
 	mtk_get_gpu_loading(&pm_gpu_loading);
-	gpu_perf_counter.counter[VINSTR_GPU_FREQ] = gpufreq_get_cur_freq(TARGET_DEFAULT);
-	gpu_perf_counter.counter[VINSTR_GPU_VOLT] = gpufreq_get_cur_volt(TARGET_DEFAULT);
+	gpu_perf_counter.counter[VINSTR_GPU_FREQ] = mt_gpufreq_get_cur_freq();
+	gpu_perf_counter.counter[VINSTR_GPU_VOLT] = mt_gpufreq_get_cur_volt();
 	gpu_perf_counter.counter[VINSTR_GPU_LOADING] = pm_gpu_loading;
 
 	for (i = VINSTR_GPU_ACTIVE; i <= VINSTR_LS_MEM_ATOMIC; i++) {

@@ -419,7 +419,7 @@ int mtk_common_ged_dvfs_get_last_commit_idx(void)
 
 int mtk_common_ged_dvfs_get_last_commit_top_idx(void)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (int)ged_dvfs_get_last_commit_top_idx();
 #else
 	return -1;
@@ -428,7 +428,7 @@ int mtk_common_ged_dvfs_get_last_commit_top_idx(void)
 
 int mtk_common_ged_dvfs_get_last_commit_stack_idx(void)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (int)ged_dvfs_get_last_commit_stack_idx();
 #else
 	return -1;
@@ -436,7 +436,7 @@ int mtk_common_ged_dvfs_get_last_commit_stack_idx(void)
 }
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_idx(void)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (unsigned long)ged_dvfs_write_sysram_last_commit_idx();
 #else
 	return -1;
@@ -445,7 +445,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_idx(void)
 
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_top_idx(void)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (unsigned long)ged_dvfs_write_sysram_last_commit_top_idx();
 #else
 	return -1;
@@ -454,7 +454,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_top_idx(void)
 
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_stack_idx(void)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (unsigned long)ged_dvfs_write_sysram_last_commit_stack_idx();
 #else
 	return -1;
@@ -462,7 +462,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_stack_idx(void)
 }
 
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_dual(void) {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 		return (unsigned long)ged_dvfs_write_sysram_last_commit_dual();
 #else
 		return -1;
@@ -470,7 +470,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_dual(void) {
 }
 
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_idx_test(int commit_idx) {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (unsigned long)ged_dvfs_write_sysram_last_commit_idx_test(commit_idx);
 #else
 	return -1;
@@ -479,7 +479,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_idx_test(int commit_i
 
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_top_idx_test(int commit_idx)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (unsigned long)ged_dvfs_write_sysram_last_commit_top_idx_test(commit_idx);
 #else
 	return -1;
@@ -488,7 +488,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_top_idx_test(int comm
 
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_stack_idx_test(int commit_idx)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (unsigned long)ged_dvfs_write_sysram_last_commit_stack_idx_test(commit_idx);
 #else
 	return -1;
@@ -497,7 +497,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_stack_idx_test(int co
 
 unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_dual_test(int top_idx, int stack_idx)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return (unsigned long)ged_dvfs_write_sysram_last_commit_dual_test(top_idx, stack_idx);
 #else
 	return -1;
@@ -506,7 +506,7 @@ unsigned long mtk_common_ged_dvfs_write_sysram_last_commit_dual_test(int top_idx
 
 int mtk_common_ged_dvfs_update_step_size(int low_step, int med_step, int high_step)
 {
-#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+#if !IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
 	return ged_dvfs_update_step_size(low_step, med_step, high_step);
 #else
 	return -1;
