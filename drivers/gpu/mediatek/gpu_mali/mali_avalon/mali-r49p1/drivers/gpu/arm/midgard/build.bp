@@ -264,7 +264,7 @@ bob_kernel_module {
         ],
     },
     kbuild_options: [
-        "CONFIG_MALI_MIDGARD=m",
+        "CONFIG_MALI_MIDGARD=y",
         "CONFIG_MALI_KUTF=n",
     ],
 }
