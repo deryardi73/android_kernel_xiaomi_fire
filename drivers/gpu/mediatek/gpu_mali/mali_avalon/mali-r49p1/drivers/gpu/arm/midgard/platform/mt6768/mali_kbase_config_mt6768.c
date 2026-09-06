@@ -135,6 +135,20 @@ static int pm_callback_power_on_nolock(struct kbase_device *kbdev)
 		KBASE_PLATFORM_LOGI("%s, GPU fail to power on", __func__);
 		return 0;
 	}
+#else
+	/*
+	 * This tree does not define CONFIG_MTK_GPUFREQ_V2 (its gpufreq is the
+	 * legacy mt_gpufreq_* API, same as mali_valhall/mali-r32p1). Without
+	 * an explicit power-on here the MFG power domain (buck/MTCMOS/CG) is
+	 * never enabled, and the very first GPU_ID register read in
+	 * kbase_gpuprops_parse_gpu_id() hits an unpowered GPU IP block ->
+	 * DEVAPC access violation -> fatal kernel BUG at boot.
+	 * Sequence mirrors pm_callback_power_on_nolock() in the
+	 * proven-working mali-r32p1 driver on this same kernel.
+	 */
+	mt_gpufreq_voltage_enable_set(1);
+	mt_gpufreq_enable_MTCMOS();
+	mt_gpufreq_enable_CG();
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 
 	gpu_dvfs_status_footprint(GPU_DVFS_STATUS_STEP_2);
@@ -206,6 +220,13 @@ static void pm_callback_power_off_nolock(struct kbase_device *kbdev)
 		KBASE_PLATFORM_LOGE("Power Off Failed");
 		return;
 	}
+#else
+	/* Mirrors pm_callback_power_off_nolock() in mali-r32p1; see the
+	 * matching comment in pm_callback_power_on_nolock() above.
+	 */
+	mt_gpufreq_disable_CG();
+	mt_gpufreq_disable_MTCMOS();
+	mt_gpufreq_voltage_enable_set(0);
 #endif /* CONFIG_MTK_GPUFREQ_V2 */
 
 	gpu_dvfs_status_footprint(GPU_DVFS_STATUS_STEP_B);
