@@ -289,24 +289,7 @@ int get_volt_gpu(struct eem_det *det)
 
 int set_volt_gpu(struct eem_det *det)
 {
-	int i;
-	unsigned int output[NR_FREQ_GPU];
-
-	for (i = 0; i < det->num_freq_tbl; i++) {
-		output[i] = det->ops->pmic_2_volt(det, det->volt_tbl_pmic[i]);
-#if 0
-		eem_error("set_volt_[%s]=0x%x(%d), ",
-		det->name,
-		det->volt_tbl_pmic[i],
-		det->ops->pmic_2_volt(det, det->volt_tbl_pmic[i]));
-#endif
-	}
-#ifdef CONFIG_MTK_GPU_SUPPORT
-	return mt_gpufreq_update_volt(output, det->num_freq_tbl);
-#else
 	return 0;
-#endif
-
 }
 
 void restore_default_volt_gpu(struct eem_det *det)
