@@ -33,6 +33,7 @@
 #include <linux/sysfs.h>
 #include <linux/debugfs.h>
 #include <linux/cpuhotplug.h>
+#include <linux/sched.h>
 
 #include "zram_drv.h"
 
@@ -1015,6 +1016,10 @@ static ssize_t comp_algorithm_store(struct device *dev,
 	struct zram *zram = dev_to_zram(dev);
 	char compressor[ARRAY_SIZE(zram->compressor)];
 	size_t sz;
+
+	/* Forbid init from changing the zram compressor by default */
+	if (!strncmp(current->comm, "init", sizeof("init")))
+		return -EPERM;
 
 	strscpy(compressor, buf, sizeof(compressor));
 	/* ignore trailing newline */
