@@ -110,62 +110,7 @@ int get_volt_cpu(struct eem_det *det)
 /* volt_tbl_pmic is convert from 10uV */
 int set_volt_cpu(struct eem_det *det)
 {
-	int value = 0;
-	int errcheck = 0;
-	enum eem_det_id cpudvfsindex;
-
-	FUNC_ENTER(FUNC_LV_HELP);
-
-	mutex_lock(&record_mutex);
-
-	for (value = 0; value < det->num_freq_tbl; value++) {
-		record_tbl_locked[value] =
-			det->volt_tbl_pmic[value];
-	}
-
-	if (record_tbl_locked[0] < det->volt_tbl_orig[15])
-		errcheck = 1;
-
-	if (errcheck == 0) {
-		cpudvfsindex = detid_to_dvfsid(det);
-		value = mt_cpufreq_update_volt(cpudvfsindex,
-				record_tbl_locked, det->num_freq_tbl);
-	} else
-		WARN_ON(errcheck);
-#if 0
-	cpudvfsindex = detid_to_dvfsid(det);
-	value = mt_cpufreq_update_volt(cpudvfsindex,
-			record_tbl_locked, det->num_freq_tbl);
-#endif
-#if 0
-	/*
-	 *eem_debug("[set_volt_cpu %s].volt_tbl[0] = 0x%X
-	 *		----- Ori[0x%x] volt_tbl_pmic[0] = 0x%X (%d)\n",
-	 *	det->name,
-	 *	det->volt_tbl[0], det->volt_tbl_orig[0],
-	 *	det->volt_tbl_pmic[0], det->ops->pmic_2_volt(det,
-	 *		det->volt_tbl_pmic[0]));
-	 * eem_debug("[set_volt_cpu %s].volt_tbl[7] = 0x%X
-	 *	----- Ori[0x%x] volt_tbl_pmic[7] = 0x%X (%d)\n",
-	 *	det->name,
-	 *	det->volt_tbl[7], det->volt_tbl_orig[7],
-	 *	det->volt_tbl_pmic[7], det->ops->pmic_2_volt(det,
-	 *		det->volt_tbl_pmic[7]));
-	 *eem_debug("[set_volt_cpu %s].volt_tbl[8] = 0x%X
-	 *		----- Ori[0x%x] volt_tbl_pmic[8] = 0x%X (%d)\n",
-	 *	det->name,
-	 *	det->volt_tbl[8], det->volt_tbl_orig[8],
-	 *	det->volt_tbl_pmic[8], det->ops->pmic_2_volt(det,
-	 *		det->volt_tbl_pmic[8]));
-	 */
-#endif
-
-	mutex_unlock(&record_mutex);
-
-	FUNC_EXIT(FUNC_LV_HELP);
-
-	return value;
-
+	return 0;
 }
 
 void restore_default_volt_cpu(struct eem_det *det)
