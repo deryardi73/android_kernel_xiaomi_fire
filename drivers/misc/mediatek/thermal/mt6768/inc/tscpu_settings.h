@@ -106,7 +106,7 @@
  * It polls CPU TS in hrtimer and run ATM in RT 98 kthread.
  * This is for Ever est only.
  */
-/* #define FAST_RESPONSE_ATM				(1) */
+#define FAST_RESPONSE_ATM						(1)
 #define THERMAL_INIT_VALUE						(0xDA1)
 
 /* 1: mtk_tc.c supports LVTS; 0: o.w. */
