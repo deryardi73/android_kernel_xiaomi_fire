@@ -310,11 +310,10 @@ void nf_reinject(struct nf_queue_entry *entry, unsigned int verdict)
 
 	hooks = nf_hook_entries_head(net, pf, entry->state.hook);
 
-	nf_queue_entry_release_refs(entry);
-
 	i = entry->hook_index;
 	if (WARN_ON_ONCE(!hooks || i >= hooks->num_hook_entries)) {
 		rcu_read_unlock();
+		nf_queue_entry_release_refs(entry);
 		kfree_skb(skb);
 		kfree(entry);
 		return;
@@ -356,6 +355,7 @@ next_hook:
 	}
 
 	rcu_read_unlock();
+	nf_queue_entry_release_refs(entry);
 	kfree(entry);
 }
 EXPORT_SYMBOL(nf_reinject);
