@@ -54,6 +54,9 @@ choice
 	config DEFAULT_MQ_DEADLINE
 		bool "MQ-Deadline" if MQ_IOSCHED_DEADLINE=y
 
+	config DEFAULT_MQ_IOSCHED_CPQ
+		bool "MQ_IOSCHED_CPQ" if MQ_IOSCHED_CPQ=y
+
 	config DEFAULT_DEADLINE
 		bool "Deadline" if IOSCHED_DEADLINE=y
 
@@ -69,6 +72,7 @@ config DEFAULT_IOSCHED
 	string
 	default "ssg" if DEFAULT_MQ_IOSCHED_SSG
 	default "mq-deadline" if DEFAULT_MQ_DEADLINE
+	default "cpq" if DEFAULT_MQ_IOSCHED_CPQ
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
 	default "noop" if DEFAULT_NOOP
