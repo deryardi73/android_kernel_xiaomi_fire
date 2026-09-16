@@ -2580,4 +2580,16 @@ unsigned long scale_irq_capacity(unsigned long util, unsigned long irq, unsigned
 extern struct static_key_false sched_energy_present;
 #endif
 
-#include "extension/eas_plus.h"
+/*
+ * Encoding used by select_task_rq_fair() to tag the returned CPU with the
+ * load-balance path that picked it. Formerly supplied by the now-removed
+ * kernel/sched/extension/eas_plus.h.
+ */
+#define LB_POLICY_SHIFT 16
+#define LB_CPU_MASK ((1 << LB_POLICY_SHIFT) - 1)
+
+#define LB_PREV          (0x0  << LB_POLICY_SHIFT)
+#define LB_EAS           (0x1  << LB_POLICY_SHIFT)
+#define LB_WAKE_AFFINE   (0x2  << LB_POLICY_SHIFT)
+#define LB_IDLEST        (0x4  << LB_POLICY_SHIFT)
+#define LB_IDLE_SIBLING  (0x8  << LB_POLICY_SHIFT)
