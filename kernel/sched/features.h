@@ -118,11 +118,6 @@ SCHED_FEAT(FIND_BEST_TARGET, false)
  *   those tasks through the mainline slow path.
  */
 SCHED_FEAT(EAS_PREFER_IDLE, true)
-#ifdef CONFIG_MTK_SCHED_LB_ENHANCEMENT
-SCHED_FEAT(SCHED_MTK_EAS, true)
-#else
-SCHED_FEAT(SCHED_MTK_EAS, false)
-#endif
 
 /*
  * Apply schedtune boost hold to tasks of all sched classes.
