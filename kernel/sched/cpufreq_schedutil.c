@@ -17,7 +17,6 @@
 
 #include <linux/sched/cpufreq.h>
 #include <trace/events/power.h>
-#include "cpufreq_schedutil.h"
 
 void (*cpufreq_notifier_fp)(int cluster_id, unsigned long freq);
 EXPORT_SYMBOL(cpufreq_notifier_fp);
@@ -191,10 +190,6 @@ static void sugov_deferred_update(struct sugov_policy *sg_policy, u64 time,
 	}
 }
 
-#ifdef CONFIG_NONLINEAR_FREQ_CTL
-
-#include "cpufreq_schedutil_plus.c"
-#else
 /**
  * get_next_freq - Compute a new frequency for a given cpufreq policy.
  * @sg_policy: schedutil policy object to compute the new frequency for.
@@ -236,7 +231,6 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 
 	return cpufreq_driver_resolve_freq(policy, freq);
 }
-#endif
 
 extern long
 schedtune_cpu_margin_with(unsigned long util, int cpu, struct task_struct *p);
