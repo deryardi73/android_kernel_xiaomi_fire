@@ -176,30 +176,15 @@ void tcp_assign_congestion_control(struct sock *sk)
 
 void tcp_init_congestion_control(struct sock *sk)
 {
-    struct inet_connection_sock *icsk = inet_csk(sk);
-    const struct tcp_congestion_ops *ca;
+	const struct inet_connection_sock *icsk = inet_csk(sk);
 
-    rcu_read_lock();
-
-    ca = tcp_ca_find("bbr");
-    if (ca) {
-        icsk->icsk_ca_ops = ca;
-        pr_debug("TCP: Assigned BBR to new socket\n");
-    } else {
-        icsk->icsk_ca_ops = &tcp_reno;
-    }
-
-    rcu_read_unlock();
-
-    tcp_sk(sk)->prior_ssthresh = 0;
-
-    if (icsk->icsk_ca_ops && icsk->icsk_ca_ops->init)
-        icsk->icsk_ca_ops->init(sk);
-
-    if (tcp_ca_needs_ecn(sk))
-        INET_ECN_xmit(sk);
-    else
-        INET_ECN_dontxmit(sk);
+	tcp_sk(sk)->prior_ssthresh = 0;
+	if (icsk->icsk_ca_ops->init)
+		icsk->icsk_ca_ops->init(sk);
+	if (tcp_ca_needs_ecn(sk))
+		INET_ECN_xmit(sk);
+	else
+		INET_ECN_dontxmit(sk);
 }
 
 static void tcp_reinit_congestion_control(struct sock *sk,
@@ -264,17 +249,8 @@ int tcp_set_default_congestion_control(struct net *net, const char *name)
 /* Set default value from kernel configuration at bootup */
 static int __init tcp_congestion_default(void)
 {
-    int ret;
-
-    pr_info("=== Forcing TCP default congestion control to BBR ===\n");
-
-    ret = tcp_set_default_congestion_control(&init_net, "bbr");
-    if (ret)
-        pr_err("Failed to set BBR as default: %d\n", ret);
-    else
-        pr_info("Successfully set BBR as default TCP congestion control\n");
-
-    return ret;
+	return tcp_set_default_congestion_control(&init_net,
+						  CONFIG_DEFAULT_TCP_CONG);
 }
 late_initcall(tcp_congestion_default);
 
