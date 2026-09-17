@@ -23,6 +23,7 @@
 #include <linux/ioprio.h>
 #include <linux/hashtable.h>
 #include <linux/elevator.h>
+#include <linux/jiffies.h>
 
 #include <trace/events/block.h>
 
@@ -119,6 +120,13 @@ struct cpq_data {
 	unsigned int batching;
 	unsigned int starved;
 	enum cpq_data_dir last_dir;
+
+	/* Group round-robin state (fore_timeout/back_timeout) */
+	unsigned int active_group;
+	unsigned long group_switch_time;
+
+	/* Last time last_dir changed (slice_idle) */
+	unsigned long dir_switch_time;
 
 	/* Tunables */
 	int fifo_expire[CPQ_DIR_COUNT];
@@ -260,6 +268,25 @@ static void cpq_remove_request(struct request_queue *q,
 }
 
 /*
+ * True if group has any pending request, at any priority/direction.
+ */
+static bool cpq_group_has_work(struct cpq_data *cd, unsigned int group)
+{
+	int j, k;
+
+	for (j = 0; j < CPQ_PRIO_LEVELS; j++) {
+		struct cpq_queue *cq = &cd->groups[group].prio[j];
+
+		for (k = 0; k < CPQ_DIR_COUNT; k++) {
+			if (!list_empty(&cq->fifo_list[k]))
+				return true;
+		}
+	}
+
+	return false;
+}
+
+/*
  * Dispatch request with deadline and aging consideration
  */
 static struct request *cpq_dispatch_request_from_queue(struct cpq_data *cd,
@@ -270,8 +297,16 @@ static struct request *cpq_dispatch_request_from_queue(struct cpq_data *cd,
 	struct cpq_rq *crq;
 	int order[CPQ_DIR_COUNT];
 	int dir, k;
+	bool queue_hot;
 
-	if (cd->batching < cd->fifo_batch && cq->next_rq[cd->last_dir]) {
+	/* io_threshold gates the fast path: only a queue we issued from
+	 * recently gets to skip straight to next_rq. 0 disables it. */
+	queue_hot = cd->io_threshold &&
+	            cq->last_issue &&
+	            time_before(now, cq->last_issue +
+	                         nsecs_to_jiffies(cd->io_threshold));
+
+	if (queue_hot && cd->batching < cd->fifo_batch && cq->next_rq[cd->last_dir]) {
 		dir = cd->last_dir;
 		rq = cq->next_rq[dir];
 		cq->next_rq[dir] = elv_rb_latter_request(rq->q, rq);
@@ -284,11 +319,14 @@ static struct request *cpq_dispatch_request_from_queue(struct cpq_data *cd,
 	 * Decide which direction to try first. Writes are starved of
 	 * service by default (reads are always tried first below), so
 	 * once cd->starved reaches cd->writes_starved we flip the order
-	 * for this dispatch and let a write through.
+	 * for this dispatch and let a write through. slice_idle damps
+	 * that flip so it can't fire more than once per slice_idle.
 	 */
 	if (!list_empty(&cq->fifo_list[CPQ_WRITE]) &&
 	    (list_empty(&cq->fifo_list[CPQ_READ]) ||
-	     cd->starved >= cd->writes_starved)) {
+	     (cd->starved >= cd->writes_starved &&
+	      time_after_eq(now, cd->dir_switch_time +
+	                    nsecs_to_jiffies(cd->slice_idle))))) {
 		order[0] = CPQ_WRITE;
 		order[1] = CPQ_READ;
 	} else {
@@ -347,7 +385,11 @@ found:
 	else if (!list_empty(&cq->fifo_list[CPQ_WRITE]))
 		cd->starved++;
 
+	if (dir != cd->last_dir)
+		cd->dir_switch_time = now;
+
 	cd->last_dir = dir;
+	cq->last_issue = now;
 	return rq;
 }
 
@@ -443,6 +485,10 @@ static int cpq_init_sched(struct request_queue *q, struct elevator_type *e)
 	cd->batching = 0;
 	cd->starved = 0;
 	cd->last_dir = CPQ_WRITE;
+
+	cd->active_group = CPQ_GROUP_FG;
+	cd->group_switch_time = jiffies;
+	cd->dir_switch_time = jiffies;
 
 	/* Set tunables */
 	cd->fifo_expire[CPQ_READ] = read_expire;
@@ -648,7 +694,9 @@ static struct request *cpq_dispatch_request(struct blk_mq_hw_ctx *hctx)
 	struct request *rq = NULL;
 	unsigned long flags;
 	unsigned long now = jiffies;
-	int i, j;
+	unsigned int group_order[CPQ_GROUPS];
+	unsigned int active, other, gi, i, j;
+	bool active_timed_out;
 
 	spin_lock_irqsave(&cd->lock, flags);
 
@@ -659,13 +707,39 @@ static struct request *cpq_dispatch_request(struct blk_mq_hw_ctx *hctx)
 		goto out;
 	}
 
+	/* FG serviced first by default; once it holds past its own
+	 * fore_timeout/back_timeout and BG actually has work, let BG in. */
+	active = cd->active_group;
+	other = active ^ 1;
+	active_timed_out = time_after_eq(now, cd->group_switch_time +
+	                                  cd->groups[active].timeout);
+
+	if (active_timed_out && cpq_group_has_work(cd, other)) {
+		group_order[0] = other;
+		group_order[1] = active;
+	} else {
+		group_order[0] = active;
+		group_order[1] = other;
+	}
+
 	/* Try to dispatch from queues with priority and aging */
-	for (i = 0; i < CPQ_GROUPS; i++) {
+	for (gi = 0; gi < CPQ_GROUPS; gi++) {
+		i = group_order[gi];
+
 		for (j = 0; j < CPQ_PRIO_LEVELS; j++) {
 			struct cpq_queue *cq = &cd->groups[i].prio[j];
 
 			rq = cpq_dispatch_request_from_queue(cd, cq, now);
 			if (rq) {
+				if (i != cd->active_group) {
+					cd->groups[cd->active_group].starved++;
+					cd->active_group = i;
+					cd->group_switch_time = now;
+					cd->groups[i].batched = 0;
+				} else {
+					cd->groups[i].batched++;
+				}
+
 				cd->batching++;
 				goto out;
 			}
