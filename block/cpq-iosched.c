@@ -56,17 +56,17 @@
 /*
  * Default tunables
  */
-static const int read_expire = HZ / 2;        /* 500ms */
-static const int write_expire = 5 * HZ;       /* 5 seconds */
-static const int writes_starved = 2;
+static const int read_expire = HZ / 8;        /* 125ms */
+static const int write_expire = 2 * HZ;       /* 2s */
+static const int writes_starved = 4;
 static const int prio_aging_expire = 10 * HZ; /* 10s */
-static const int fifo_batch = 16;
+static const int fifo_batch = 8;
 
 #define CPQ_FORE_TIMEOUT        (2 * HZ)       /* 2s */
 #define CPQ_BACK_TIMEOUT        (HZ / 8)       /* 125ms */
-#define CPQ_SLICE_IDLE          (1000000)      /* 1ms in ns */
-#define CPQ_IO_THRESHOLD        (1000000)      /* 1ms in ns */
-#define CPQ_ASYNC_DEPTH         (8)
+#define CPQ_SLICE_IDLE          (4000000)      /* 4ms */
+#define CPQ_IO_THRESHOLD        (3000000)      /* 3ms */
+#define CPQ_ASYNC_DEPTH_MAX     (8)
 
 /*
  * Request direction
@@ -499,7 +499,7 @@ static int cpq_init_sched(struct request_queue *q, struct elevator_type *e)
 	cd->prio_aging_expire = prio_aging_expire;
 	cd->slice_idle = CPQ_SLICE_IDLE;
 	cd->io_threshold = CPQ_IO_THRESHOLD;
-	cd->async_depth = CPQ_ASYNC_DEPTH;
+	cd->async_depth = CPQ_ASYNC_DEPTH_MAX;
 	cd->cpq_log = 0;
 
 	eq->elevator_data = cd;
@@ -553,10 +553,12 @@ static void cpq_depth_updated(struct blk_mq_hw_ctx *hctx)
 {
 	struct cpq_data *cd = hctx->queue->elevator->elevator_data;
 	unsigned int depth = hctx->queue->nr_requests;
-	unsigned int shallow_depth = (depth * 3) / 4;
+	unsigned int shallow_depth = depth / 4;
 
 	if (shallow_depth == 0)
 		shallow_depth = 1;
+	else if (shallow_depth > CPQ_ASYNC_DEPTH_MAX)
+		shallow_depth = CPQ_ASYNC_DEPTH_MAX;
 
 	cd->async_depth = shallow_depth;
 	sbitmap_queue_min_shallow_depth(&hctx->sched_tags->bitmap_tags, 1);
