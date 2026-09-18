@@ -528,6 +528,14 @@ config TCP_CONG_WESTWOOD
 	TCP Westwood+ significantly increases fairness wrt TCP Reno in
 	wired networks and throughput over wireless links.
 
+config TCP_CONG_CAOHEJING
+	tristate "TCP Caohejing"
+	default y
+	---help---
+	A simplified TCP Caohejing congestion control algorithm that
+	transitions between UP (gain > 1) and DOWN (gain < 1) states based
+	on actual delivery rate gains and losses.
+
 config TCP_CONG_HTCP
         tristate "H-TCP"
         default n
