@@ -549,11 +549,28 @@ static unsigned long rfx_iowait_apply(struct rfx_cpu *rfx_c, u64 time,
 
 /************************ Hold frequency ***********************/
 
+static inline bool rfx_uclamp_rq_is_capped(struct rq *rq)
+{
+	unsigned long rq_util;
+	unsigned long max_util;
+
+	if (!static_branch_likely(&sched_asym_cpucapacity))
+		return false;
+
+	rq_util = cpu_util_cfs(rq) + cpu_util_rt(rq);
+	max_util = READ_ONCE(rq->uclamp[UCLAMP_MAX].value);
+
+	return max_util != SCHED_CAPACITY_SCALE && rq_util >= max_util;
+}
+
 #ifdef CONFIG_NO_HZ_COMMON
 static bool rfx_hold_freq(struct rfx_cpu *rfx_c)
 {
 	unsigned long idle_calls;
 	bool ret;
+
+	if (rfx_uclamp_rq_is_capped(cpu_rq(rfx_c->cpu)))
+		return false;
 
 	idle_calls = tick_nohz_get_idle_calls_cpu(rfx_c->cpu);
 	ret = idle_calls == rfx_c->saved_idle_calls;
