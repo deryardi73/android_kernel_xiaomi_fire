@@ -196,7 +196,10 @@ static int __nf_queue(struct sk_buff *skb, const struct nf_hook_state *state,
 
 	*entry = (struct nf_queue_entry) {
 		.skb	= skb,
-		.skb_dev = skb->dev,
+		/* skb->dev is not set yet at LOCAL_OUT (locally generated
+		 * packets, e.g. TCP retransmits); it may be stale there.
+		 */
+		.skb_dev = state->hook == NF_INET_LOCAL_OUT ? NULL : skb->dev,
 		.state	= *state,
 		.hook_index = index,
 		.size	= sizeof(*entry) + route_key_size,
