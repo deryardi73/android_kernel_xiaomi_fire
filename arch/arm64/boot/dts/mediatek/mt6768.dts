@@ -30,10 +30,10 @@
 	/* chosen */
 	chosen: chosen {
 		bootargs = "console=tty0 console=ttyS0,921600n1 root=/dev/ram quiet loglevel=3 \
-vmalloc=400M swiotlb=noforce \
+swiotlb=noforce \
 cgroup.memory=nosocket,nokmem \
 firmware_class.path=/vendor/firmware \
-page_owner=on loop.max_part=7";
+loop.max_part=7";
 		kaslr-seed = <0 0>;
 	};
 
