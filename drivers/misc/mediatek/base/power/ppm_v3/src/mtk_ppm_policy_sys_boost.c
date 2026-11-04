@@ -395,8 +395,7 @@ static ssize_t ppm_sysboost_cluster_freq_limit_proc_write(struct file *file,
 
 	if (sscanf(buf, "%d %d %d %d",
 		&user, &cluster, &min_freq, &max_freq) == 4)
-		mt_ppm_sysboost_set_freq_limit((enum ppm_sysboost_user)user,
-			cluster, min_freq, max_freq);
+		(void)user;
 	else
 		ppm_err("@%s: Invalid input!\n", __func__);
 
@@ -454,8 +453,9 @@ static ssize_t ppm_sysboost_cluster_freqidx_limit_proc_write(struct file *file,
 			? -1
 			: p->cluster_info[cl].dvfs_tbl[max_freq_idx].frequency;
 
-		mt_ppm_sysboost_set_freq_limit((enum ppm_sysboost_user)user,
-			cl, min_freq, max_freq);
+		(void)user;
+		(void)min_freq;
+		(void)max_freq;
 	} else
 		ppm_err("@%s: Invalid input!\n", __func__);
 

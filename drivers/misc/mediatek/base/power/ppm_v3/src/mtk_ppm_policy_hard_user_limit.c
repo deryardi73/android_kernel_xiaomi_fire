@@ -276,64 +276,16 @@ static int ppm_hard_userlimit_max_cpu_freq_proc_show
 static ssize_t ppm_hard_userlimit_max_cpu_freq_proc_write(
 	struct file *file, const char __user *buffer, size_t count, loff_t *pos)
 {
-	int id, max_freq, idx, i;
-	bool is_limit = false;
+	int id, max_freq;
 
 	char *buf = ppm_copy_from_user_for_proc(buffer, count);
 
 	if (!buf)
 		return -EINVAL;
 
-	if (sscanf(buf, "%d %d", &id, &max_freq) == 2) {
-		if (id < 0 || id >= ppm_main_info.cluster_num) {
-			ppm_err("Invalid cluster id: %d\n", id);
-			goto out;
-		}
-
-		ppm_lock(&hard_userlimit_policy.lock);
-
-		if (!hard_userlimit_policy.is_enabled) {
-			ppm_warn("hard userlimit policy is not enabled!\n");
-			ppm_unlock(&hard_userlimit_policy.lock);
-			goto out;
-		}
-
-		idx = (max_freq == -1) ? -1
-			: ppm_main_freq_to_idx(id, max_freq,
-			CPUFREQ_RELATION_H);
-
-		/* error check, sync to max idx if max freq < min freq */
-		if (hard_userlimit_data.limit[id].min_freq_idx != -1
-			&& idx != -1
-			&& idx > hard_userlimit_data.limit[id].min_freq_idx)
-			hard_userlimit_data.limit[id].min_freq_idx = idx;
-
-		if (idx != hard_userlimit_data.limit[id].max_freq_idx) {
-			hard_userlimit_data.limit[id].max_freq_idx = idx;
-			ppm_dbg(HARD_USER_LIMIT,
-				"%d:hard user limit max_freq = %d KHz(idx = %d)\n",
-				id, max_freq, idx);
-		}
-
-		/* check is freq limited or not */
-		for (i = 0; i < hard_userlimit_policy.req.cluster_num; i++) {
-			if (hard_userlimit_data.limit[i].min_freq_idx != -1
-			|| hard_userlimit_data.limit[i].max_freq_idx != -1) {
-				is_limit = true;
-				break;
-			}
-		}
-		hard_userlimit_data.is_freq_limited_by_user = is_limit;
-
-		hard_userlimit_policy.is_activated =
-			ppm_hard_userlimit_is_policy_active();
-
-		ppm_unlock(&hard_userlimit_policy.lock);
-		mt_ppm_main();
-	} else
+	if (sscanf(buf, "%d %d", &id, &max_freq) != 2)
 		ppm_err("@%s: Invalid input!\n", __func__);
 
-out:
 	free_page((unsigned long)buf);
 	return count;
 }
@@ -386,8 +338,7 @@ static ssize_t ppm_hard_userlimit_cpu_freq_proc_write(struct file *file,
 
 	if (i < arg_num)
 		ppm_err("number of arguments < %d!\n", arg_num);
-	else
-		mt_ppm_hard_userlimit_cpu_freq(NR_PPM_CLUSTERS, freq_limit);
+	(void)freq_limit;
 
 out:
 	free_page((unsigned long)buf);

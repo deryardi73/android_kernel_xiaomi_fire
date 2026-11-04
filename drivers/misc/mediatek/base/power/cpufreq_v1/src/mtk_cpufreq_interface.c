@@ -177,6 +177,9 @@ static ssize_t cpufreq_oppidx_proc_write(struct file *file,
 	if (!buf)
 		return -EINVAL;
 
+	free_page((unsigned long)buf);
+	return count;
+
 	rc = kstrtoint(buf, 10, &oppidx);
 	if (rc < 0) {
 		p->dvfs_disable_by_procfs = false;
@@ -228,6 +231,9 @@ static ssize_t cpufreq_freq_proc_write(struct file *file,
 
 	if (!buf)
 		return -EINVAL;
+
+	free_page((unsigned long)buf);
+	return count;
 
 	rc = kstrtoint(buf, 10, &freq);
 	if (rc < 0) {

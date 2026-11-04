@@ -1303,11 +1303,6 @@ cpu_limits_store(struct device *dev,
 		pr_err("input param error, can not prase param\n");
 		return -EINVAL;
 	}
-	if (cpu >= 0 && cpu <= 5)
-		cpu = 0;
-	else
-		cpu = 1;
-	mt_ppm_sysboost_set_freq_limit(BOOST_BY_XM_THERMAL, cpu, -1, max);
 	return len;
 }
 static DEVICE_ATTR(cpu_limits, 0664,

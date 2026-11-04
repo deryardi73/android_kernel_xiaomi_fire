@@ -229,7 +229,7 @@ static int mt_ppm_userlimit_set_min_freq(struct ppm_user_limit *limit, int min_f
 	return 0;
 }
 
-static int mt_ppm_userlimit_set_max_freq(struct ppm_user_limit *limit, int max_freq)
+static int __maybe_unused mt_ppm_userlimit_set_max_freq(struct ppm_user_limit *limit, int max_freq)
 {
 	int idx, id, i;
 	bool is_limit = false;
@@ -350,7 +350,7 @@ static ssize_t ppm_userlimit_max_cpu_freq_proc_write(
             ppm_err("Invalid cluster id: %d\n", id);
             goto out;
         }
-		mt_ppm_userlimit_set_max_freq(&userlimit_data.limit[id], max_freq);
+		(void)max_freq;
 	} else
 		ppm_err("@%s: Invalid input!\n", __func__);
 
@@ -407,8 +407,7 @@ static ssize_t ppm_userlimit_cpu_freq_proc_write(struct file *file,
 
 	if (i < arg_num)
 		ppm_err("number of arguments < %d!\n", arg_num);
-	else
-		mt_ppm_userlimit_cpu_freq(NR_PPM_CLUSTERS, freq_limit);
+	(void)freq_limit;
 
 out:
 	free_page((unsigned long)buf);
@@ -482,22 +481,14 @@ static int ppm_userlimit_data_max_cpu_freq_proc_show(
 static ssize_t ppm_userlimit_data_max_cpu_freq_proc_write(
 	struct file *file, const char __user *buffer, size_t count, loff_t *pos)
 {
-	int ret, max_freq;
-	struct ppm_user_limit *limit = get_limit_data(file);
+	int max_freq;
 	char *buf = ppm_copy_from_user_for_proc(buffer, count);
 
 	if (!buf)
 		return -EINVAL;
 
-	if (kstrtoint(buf, 10, &max_freq) == 0) {
-		ret = mt_ppm_userlimit_set_max_freq(limit, max_freq);
-		if (ret) {
-			ppm_err("@%s: set max freq failed\n", __func__);
-			count = ret;
-		}
-	} else {
+	if (kstrtoint(buf, 10, &max_freq))
 		ppm_err("@%s: Invalid input!\n", __func__);
-	}
 
 	free_page((unsigned long)buf);
 	return count;
