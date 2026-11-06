@@ -324,7 +324,7 @@ void *workingset_eviction(struct address_space *mapping, struct page *page)
 {
 	struct pglist_data *pgdat = page_pgdat(page);
 	struct mem_cgroup *memcg = page_memcg(page);
-	int memcgid = mem_cgroup_id(memcg);
+	int memcgid;
 	unsigned long eviction;
 	struct lruvec *lruvec;
 
@@ -336,6 +336,7 @@ void *workingset_eviction(struct address_space *mapping, struct page *page)
 	if (lru_gen_enabled())
 		return lru_gen_eviction(page);
 
+	memcgid = mem_cgroup_id(memcg);
 	lruvec = mem_cgroup_lruvec(pgdat, memcg);
 	eviction = atomic_long_inc_return(&lruvec->inactive_age);
 	eviction >>= bucket_order;

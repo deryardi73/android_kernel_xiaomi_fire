@@ -3332,7 +3332,8 @@ restart:
 			continue;
 		}
 
-		VM_BUG_ON(!pfn_valid(pfn));
+		if (!pfn_valid(pfn))
+			continue;
 		if (pfn < pgdat->node_start_pfn || pfn >= pgdat_end_pfn(pgdat))
 			continue;
 
@@ -3423,7 +3424,8 @@ static void walk_pmd_range_locked(pud_t *pud, unsigned long next, struct vm_area
 			goto next;
 		}
 
-		VM_BUG_ON(!pfn_valid(pfn));
+		if (!pfn_valid(pfn))
+			goto next;
 		if (pfn < pgdat->node_start_pfn || pfn >= pgdat_end_pfn(pgdat))
 			goto next;
 
@@ -4033,7 +4035,8 @@ void lru_gen_look_around(struct page_vma_mapped_walk *pvmw)
 		if (!pte_young(pte[i]))
 			continue;
 
-		VM_BUG_ON(!pfn_valid(pfn));
+		if (!pfn_valid(pfn))
+			continue;
 		if (pfn < pgdat->node_start_pfn || pfn >= pgdat_end_pfn(pgdat))
 			continue;
 
