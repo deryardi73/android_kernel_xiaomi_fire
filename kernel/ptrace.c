@@ -283,16 +283,16 @@ static bool ptrace_has_cap(struct user_namespace *ns, unsigned int mode)
 
 static bool task_still_dumpable(struct task_struct *task, unsigned int mode)
 {
-     struct mm_struct *mm = task->mm;
-     if (mm) {
-           if (get_dumpable(mm) == SUID_DUMP_USER)
-                 return true;
-           return ptrace_has_cap(mm->user_ns, mode);
-     }
+	struct mm_struct *mm = task->mm;
+	if (mm) {
+		if (get_dumpable(mm) == SUID_DUMP_USER)
+			return true;
+		return ptrace_has_cap(mm->user_ns, mode);
+	}
 
-     if (task->user_dumpable)
-           return true;
-     return ptrace_has_cap(&init_user_ns, mode);
+	if (task->user_dumpable)
+		return true;
+	return ptrace_has_cap(&init_user_ns, mode);
 }
 
 /* Returns 0 on success, -errno on denial. */
@@ -359,8 +359,8 @@ ok:
 	 * Pairs with a write barrier in commit_creds().
 	 */
 	smp_rmb();
-     if (!task_still_dumpable(task, mode))
-           return -EPERM;
+	if (!task_still_dumpable(task, mode))
+		return -EPERM;
 
 	return security_ptrace_access_check(task, mode);
 }

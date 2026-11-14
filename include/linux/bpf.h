@@ -869,6 +869,7 @@ struct bpf_array_aux {
 	struct {
 		spinlock_t lock;
 		enum bpf_prog_type type;
+		enum bpf_attach_type attach_type;
 		bool jited;
 	} owner;
 	/* Programs with direct jumps into programs part of this array. */

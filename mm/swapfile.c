@@ -3072,7 +3072,6 @@ static int setup_swap_map_and_extents(struct swap_info_struct *p,
 	if (!cluster_info)
 		return nr_extents;
 
-
 	/*
 	 * Reduce false cache line sharing between cluster_info and
 	 * sharing same address space.
@@ -3161,6 +3160,14 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	error = claim_swapfile(p, inode);
 	if (unlikely(error))
 		goto bad_swap;
+
+	if (IS_ENCRYPTED(inode)) {
+		pr_warn_once(
+			"Filesystem-level encrypted swapfile '%s' is unsupported. Create a loop device over it, or use dm-crypt\n",
+			name->name);
+		error = -EINVAL;
+		goto bad_swap;
+	}
 
 	inode_lock(inode);
 	if (IS_SWAPFILE(inode)) {
