@@ -450,11 +450,14 @@ static int axiDmaSetup(struct platform_device *pdev,
 	ret = _init_resv_mem(pdev);
 	if (ret)
 		goto exit;
-	ret = of_reserved_mem_device_init(&pdev->dev);
-	if (ret) {
-		DBGLOG(INIT, ERROR, "of_reserved_mem_device_init failed(%d).\n",
-				ret);
-		goto exit;
+	/* OF platform creation may have already assigned the coherent pool. */
+	if (!pdev->dev.dma_mem) {
+		ret = of_reserved_mem_device_init(&pdev->dev);
+		if (ret) {
+			DBGLOG(INIT, ERROR, "of_reserved_mem_device_init failed(%d).\n",
+					ret);
+			goto exit;
+		}
 	}
 #else
 	ret = of_dma_configure(&pdev->dev, pdev->dev.of_node, true);
