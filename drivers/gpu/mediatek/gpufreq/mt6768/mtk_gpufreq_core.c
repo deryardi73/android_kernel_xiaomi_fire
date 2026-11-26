@@ -653,6 +653,9 @@ unsigned int mt_gpufreq_update_volt(unsigned int pmic_volt[], unsigned int array
 
 	for (i = 0; i < array_size; i++) {
 		target_idx = mt_gpufreq_get_ori_opp_idx(i);
+		/* EEM adds low temp offset after its own clamp, so it can exceed OPP0 volt */
+		if (pmic_volt[i] > VGPU_MAX_VOLT)
+			pmic_volt[i] = VGPU_MAX_VOLT;
 		g_opp_table[target_idx].gpufreq_volt = pmic_volt[i];
 		g_opp_table[target_idx].gpufreq_vsram =
 		__mt_gpufreq_get_vsram_by_target_volt(pmic_volt[i]);
@@ -1918,6 +1921,8 @@ static void __mt_gpufreq_volt_switch_without_vsram_volt(unsigned int volt_old, u
 	unsigned int vsram_volt_new, vsram_volt_old;
 
 	volt_new = VOLT_NORMALIZATION(volt_new);
+	if (volt_new > VGPU_MAX_VOLT)
+		volt_new = VGPU_MAX_VOLT;
 
 	gpufreq_pr_debug("@%s: volt_new = %d, volt_old = %d\n", __func__, volt_new, volt_old);
 
@@ -1970,7 +1975,8 @@ static void __mt_gpufreq_vsram_gpu_volt_switch(enum g_volt_switch_enum switch_wa
 
 	steps = (max_diff / DELAY_FACTOR) + 1;
 
-	regulator_set_voltage(g_pmic->reg_vsram_gpu, volt_new * 10, VSRAM_GPU_MAX_VOLT * 10 + 125);
+	regulator_set_voltage(g_pmic->reg_vsram_gpu, volt_new * 10,
+			max_t(unsigned int, VSRAM_GPU_MAX_VOLT, volt_new) * 10 + 125);
 	udelay(steps * sfchg_rate + 52);
 
 	gpufreq_pr_debug("@%s: udelay us(%d) = steps(%d) * sfchg_rate(%d)\n",
@@ -1992,7 +1998,8 @@ static void __mt_gpufreq_vgpu_volt_switch(enum g_volt_switch_enum switch_way, un
 
 	steps = (max_diff / DELAY_FACTOR) + 1;
 
-	regulator_set_voltage(g_pmic->reg_vgpu, volt_new * 10, VGPU_MAX_VOLT * 10 + 125);
+	regulator_set_voltage(g_pmic->reg_vgpu, volt_new * 10,
+			max_t(unsigned int, VGPU_MAX_VOLT, volt_new) * 10 + 125);
 	udelay(steps * sfchg_rate + 52);
 
 	gpufreq_pr_debug("@%s: udelay us(%d) = steps(%d) * sfchg_rate(%d)\n",
@@ -2359,6 +2366,10 @@ static unsigned int __mt_gpufreq_get_vsram_by_target_volt(unsigned int volt)
 		target_vsram = volt + 10000;
 	else
 		target_vsram = g_fixed_vsram_volt;
+
+	/* never request more than the OPP0 vsram, regulator core BUG_ON()s on min > max */
+	if (target_vsram > VSRAM_GPU_MAX_VOLT)
+		target_vsram = VSRAM_GPU_MAX_VOLT;
 
 	gpufreq_pr_debug("@%s: g_fixed_vsram_volt_threshold = %d, g_fixed_vsram_volt = %d, volt = %d, target_vsram = %d\n",
 			__func__, g_fixed_vsram_volt_threshold,

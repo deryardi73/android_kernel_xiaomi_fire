@@ -229,7 +229,7 @@ enum mt_cpu_dvfs_id {
 
 
 /* different for GPU */
-#define VMAX_VAL_GPU                    (0x94) /* eem domain: 1.11875v*/
+#define VMAX_VAL_GPU                    (0x97) /* eem domain: 1.14375v (OPP0 OC), was 0x94 = 1.125v */
 #define VMIN_VAL_GPU                    (0x42) /* eem domain: 0.6125v*/
 #define VCO_VAL_GPU                     (0x40) /* eem domain: 0.575v*/
 

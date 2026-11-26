@@ -203,7 +203,7 @@ unsigned int ptp_data[3] = {0, 0, 0};
 unsigned int gpu_opp0_t_volt[6] = {
 	114000, 114000, 109250, 104500, 997500, 95000
 };
-unsigned int gpu_vb[3] = {114000, 114000, 114000};
+unsigned int gpu_vb[3] = {114375, 114375, 114375};
 unsigned int gpu_vb_flag;
 unsigned int gpu_vb_volt;
 
